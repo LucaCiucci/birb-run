@@ -3,11 +3,11 @@ use std::{path::PathBuf, str::FromStr};
 use serde_json::{Number, Value as Json};
 use yaml_rust::Yaml;
 
-use crate::{task::Task};
+use crate::task::Task;
 
 mod command;
-mod io;
 mod deps;
+mod io;
 
 pub fn parse_task(workdir: impl Into<PathBuf>, name: &str, value: &Yaml) -> Task {
     let value = value.as_hash().expect("Expected task value to be a hash");
@@ -16,7 +16,8 @@ pub fn parse_task(workdir: impl Into<PathBuf>, name: &str, value: &Yaml) -> Task
     task.body.workdir = workdir.into();
 
     if let Some(value) = value.get(&Yaml::String("workdir".into())) {
-        task.body.workdir = PathBuf::from(value.as_str().expect("Expected 'workdir' to be a string"));
+        task.body.workdir =
+            PathBuf::from(value.as_str().expect("Expected 'workdir' to be a string"));
     }
 
     if let Some(value) = value.get(&Yaml::String("phony".into())) {
@@ -46,9 +47,6 @@ pub fn parse_task(workdir: impl Into<PathBuf>, name: &str, value: &Yaml) -> Task
     task
 }
 
-
-
-
 fn yaml_to_json(yaml: &Yaml) -> Json {
     match yaml {
         Yaml::Null => Json::Null,
@@ -63,7 +61,7 @@ fn yaml_to_json(yaml: &Yaml) -> Json {
                 .map(|(k, v)| (k.as_str().unwrap().to_string(), yaml_to_json(v)))
                 .collect();
             Json::Object(obj)
-        },
+        }
         Yaml::Alias(_) => todo!(),
         Yaml::BadValue => panic!("Encountered a bad value in YAML"),
     }

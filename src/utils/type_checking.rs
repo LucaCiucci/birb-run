@@ -2,7 +2,6 @@ use serde_json::Value as Json;
 
 use crate::task::ArgType;
 
-
 pub fn check_type(ty: &ArgType, value: &Json) -> Result<(), TypeCheckError> {
     match ty {
         ArgType::String => value
@@ -31,12 +30,14 @@ pub fn check_type(ty: &ArgType, value: &Json) -> Result<(), TypeCheckError> {
             .ok_or(TypeCheckError::MismatchedType {
                 expected: ty.clone(),
             }),
-        ArgType::Boolean => value
-            .is_boolean()
-            .then_some(())
-            .ok_or(TypeCheckError::MismatchedType {
-                expected: ty.clone(),
-            }),
+        ArgType::Boolean => {
+            value
+                .is_boolean()
+                .then_some(())
+                .ok_or(TypeCheckError::MismatchedType {
+                    expected: ty.clone(),
+                })
+        }
         ArgType::Path => value
             .is_string()
             .then_some(())

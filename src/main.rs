@@ -1,7 +1,7 @@
-use birb_run::{task::{Task, TaskInvocation}};
+use birb_run::task::{Task, TaskInvocation};
+use clap::Parser;
 use linked_hash_map::LinkedHashMap;
 use yaml_rust::{Yaml, YamlLoader};
-use clap::Parser;
 
 #[derive(Parser, Debug)]
 #[clap(styles = cli_styles::CLAP_STYLES)]
@@ -27,8 +27,7 @@ fn main() {
 
     let args = Cli::parse();
 
-    let cwd = std::env::current_dir()
-        .expect("Failed to get current directory");
+    let cwd = std::env::current_dir().expect("Failed to get current directory");
 
     let (taskfile_dir, taskfile_path) = {
         let mut dir = cwd;
@@ -44,15 +43,14 @@ fn main() {
     };
 
     let docs = YamlLoader::load_from_str(
-    &std::fs::read_to_string(&taskfile_path).expect("Failed to read 'tasks.yaml' file")
-    ).unwrap();
+        &std::fs::read_to_string(&taskfile_path).expect("Failed to read 'tasks.yaml' file"),
+    )
+    .unwrap();
 
     let mut all_tasks: LinkedHashMap<String, Task> = Default::default();
 
     for doc in docs {
-        let doc = doc
-            .as_hash()
-            .expect("Expected a YAML hash");
+        let doc = doc.as_hash().expect("Expected a YAML hash");
 
         let tasks = doc
             .get(&Yaml::String("tasks".into()))
@@ -62,11 +60,7 @@ fn main() {
 
         for (key, value) in tasks {
             let key = key.as_str().expect("Expected task key to be a string");
-            let task = Task::from_yaml(
-                &taskfile_dir,
-                key,
-                value,
-            );
+            let task = Task::from_yaml(&taskfile_dir, key, value);
             all_tasks.insert(key.to_string(), task.clone());
         }
     }
@@ -75,28 +69,29 @@ fn main() {
 
     match args {
         Cli::Run(args) => {
-            let task = all_tasks
-                .get(&args.task)
-                .expect("Task not found");
+            let task = all_tasks.get(&args.task).expect("Task not found");
 
-            birb_run::run::run(&all_tasks, &TaskInvocation {
-                name: task.name.clone(),
-                args: Default::default(),
-            });
-        },
+            birb_run::run::run(
+                &all_tasks,
+                &TaskInvocation {
+                    name: task.name.clone(),
+                    args: Default::default(),
+                },
+            );
+        }
         Cli::Clean(args) => {
-            let task = all_tasks
-                .get(&args.task)
-                .expect("Task not found");
+            let task = all_tasks.get(&args.task).expect("Task not found");
 
-            birb_run::run::clean(&all_tasks, &TaskInvocation {
-                name: task.name.clone(),
-                args: Default::default(),
-            });
+            birb_run::run::clean(
+                &all_tasks,
+                &TaskInvocation {
+                    name: task.name.clone(),
+                    args: Default::default(),
+                },
+            );
         }
     }
 
     //let boot_elapsed = boot.elapsed();
     //println!("Total: {:?}", boot_elapsed);
 }
-

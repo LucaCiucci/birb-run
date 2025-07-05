@@ -1,14 +1,17 @@
 use linked_hash_map::LinkedHashMap;
 
-use crate::{run::{dependency_resolution::{build_dependency_graph, topological_sort::topological_sort}, execution::{clean_single_task, maybe_run_single_task, triggers::NaiveTriggerChecker}}, task::{Task, TaskInvocation}};
+use crate::{
+    run::{
+        dependency_resolution::{build_dependency_graph, topological_sort::topological_sort},
+        execution::{clean_single_task, maybe_run_single_task, triggers::NaiveTriggerChecker},
+    },
+    task::{Task, TaskInvocation},
+};
 
 pub mod dependency_resolution;
 pub mod execution;
 
-pub fn run(
-    tasks: &LinkedHashMap<String, Task>,
-    request: &TaskInvocation,
-) {
+pub fn run(tasks: &LinkedHashMap<String, Task>, request: &TaskInvocation) {
     let (deps_graph, instantiations) = build_dependency_graph(tasks, request);
 
     let sorted = topological_sort(&deps_graph).unwrap();
@@ -19,10 +22,7 @@ pub fn run(
     }
 }
 
-pub fn clean(
-    tasks: &LinkedHashMap<String, Task>,
-    request: &TaskInvocation,
-) {
+pub fn clean(tasks: &LinkedHashMap<String, Task>, request: &TaskInvocation) {
     let (deps_graph, instatiations) = build_dependency_graph(tasks, request);
 
     let sorted = topological_sort(&deps_graph).unwrap();

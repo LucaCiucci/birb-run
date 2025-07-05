@@ -5,7 +5,11 @@ use crate::{command::Command, run::execution::CommandExecutor};
 pub struct NaiveExecutor;
 
 impl CommandExecutor for NaiveExecutor {
-    fn execute<C: Borrow<Command>>(&self, pwd: impl AsRef<Path>, commands: impl IntoIterator<Item = C>) {
+    fn execute<C: Borrow<Command>>(
+        &self,
+        pwd: impl AsRef<Path>,
+        commands: impl IntoIterator<Item = C>,
+    ) {
         for command in commands {
             match command.borrow() {
                 Command::Shell(cmd) => Self::exec_shell(&pwd, &cmd),

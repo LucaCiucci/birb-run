@@ -1,4 +1,10 @@
-use std::{collections::HashMap, fs::File, io::{BufReader, Read}, path::{Path, PathBuf}, time::SystemTime};
+use std::{
+    collections::HashMap,
+    fs::File,
+    io::{BufReader, Read},
+    path::{Path, PathBuf},
+    time::SystemTime,
+};
 
 use anyhow::anyhow;
 use sha2::{Digest, Sha256};
@@ -8,16 +14,8 @@ use crate::task::InstantiatedTask;
 pub trait TaskTriggerChecker {
     type TaskContext;
     fn new_task_context(&mut self) -> Self::TaskContext;
-    fn should_run(
-        &mut self,
-        task: &InstantiatedTask,
-        context: &mut Self::TaskContext,
-    ) -> bool;
-    fn check_outputs(
-        &mut self,
-        task: &InstantiatedTask,
-        context: &mut Self::TaskContext,
-    );
+    fn should_run(&mut self, task: &InstantiatedTask, context: &mut Self::TaskContext) -> bool;
+    fn check_outputs(&mut self, task: &InstantiatedTask, context: &mut Self::TaskContext);
 }
 
 #[derive(Debug, Default)]
@@ -30,11 +28,7 @@ impl TaskTriggerChecker for NaiveTriggerChecker {
     fn new_task_context(&mut self) -> Self::TaskContext {
         Default::default()
     }
-    fn should_run(
-        &mut self,
-        task: &InstantiatedTask,
-        context: &mut Self::TaskContext,
-    ) -> bool {
+    fn should_run(&mut self, task: &InstantiatedTask, context: &mut Self::TaskContext) -> bool {
         let output_hashes = context;
 
         let has_no_outputs = task.resolve_outputs().next().is_none();
@@ -52,11 +46,7 @@ impl TaskTriggerChecker for NaiveTriggerChecker {
 
         sources_changed(task, output_hashes, &self.not_changed)
     }
-    fn check_outputs(
-        &mut self,
-        task: &InstantiatedTask,
-        context: &mut Self::TaskContext,
-    ) {
+    fn check_outputs(&mut self, task: &InstantiatedTask, context: &mut Self::TaskContext) {
         let output_hashes = context;
 
         let newest_source_timestamp = newest_input_timestamp(task, &self.not_changed)
@@ -65,12 +55,16 @@ impl TaskTriggerChecker for NaiveTriggerChecker {
         for path in task.resolve_outputs() {
             let path: &Path = path.as_ref();
             if !path.exists() {
-                panic!("Output file {} does not exist after running task '{}'", path.display(), task.name);
+                panic!(
+                    "Output file {} does not exist after running task '{}'",
+                    path.display(),
+                    task.name
+                );
             }
-            
-            let metadata = std::fs::metadata(path)
-                .expect("Failed to get metadata for output file");
-            let output_timestamp = metadata.modified()
+
+            let metadata = std::fs::metadata(path).expect("Failed to get metadata for output file");
+            let output_timestamp = metadata
+                .modified()
                 .expect("Failed to get modified time for output file");
 
             if metadata.is_file() {
@@ -101,7 +95,11 @@ impl TaskTriggerChecker for NaiveTriggerChecker {
 
             if let Some(newest_source_timestamp) = &newest_source_timestamp {
                 if &output_timestamp < newest_source_timestamp {
-                    panic!("Output file {} is older than the newest source file for task '{}'", path.display(), task.name);
+                    panic!(
+                        "Output file {} is older than the newest source file for task '{}'",
+                        path.display(),
+                        task.name
+                    );
                 }
             } else {
                 // If there are no sources, we assume the output is valid.
@@ -118,8 +116,8 @@ fn sources_changed(
     output_hashes: &mut HashMap<PathBuf, Hash>,
     not_changed: &HashMap<PathBuf, bool>,
 ) -> bool {
-    let newest_source_timestamp = newest_input_timestamp(task, not_changed)
-        .expect("Failed to check input timestamps");
+    let newest_source_timestamp =
+        newest_input_timestamp(task, not_changed).expect("Failed to check input timestamps");
 
     // check all output files against the source file timestamp
     let mut changed = false;
@@ -130,10 +128,10 @@ fn sources_changed(
             changed = true;
             continue;
         }
-        let metadata = std::fs::metadata(path)
-            .expect("Failed to get metadata for output file");
+        let metadata = std::fs::metadata(path).expect("Failed to get metadata for output file");
         if let Some(newest_source_timestamp) = newest_source_timestamp {
-            let output_timestamp = metadata.modified()
+            let output_timestamp = metadata
+                .modified()
                 .expect("Failed to get modified time for output file");
             if output_timestamp < newest_source_timestamp {
                 // If the output file is older than the newest source file,

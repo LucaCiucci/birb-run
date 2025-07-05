@@ -5,13 +5,16 @@ use linked_hash_set::LinkedHashSet;
 
 use crate::task::{InstantiatedTask, Task, TaskInvocation};
 
-pub mod topological_sort;
 pub mod naive;
+pub mod topological_sort;
 
 pub fn build_dependency_graph(
     tasks: &LinkedHashMap<String, Task>,
     request: &TaskInvocation,
-) -> (HashMap<TaskInvocation, LinkedHashSet<TaskInvocation>>, HashMap<TaskInvocation, InstantiatedTask>) {
+) -> (
+    HashMap<TaskInvocation, LinkedHashSet<TaskInvocation>>,
+    HashMap<TaskInvocation, InstantiatedTask>,
+) {
     let mut queue: VecDeque<TaskInvocation> = VecDeque::new();
 
     // Initialize the queue with the requested task invocation
@@ -51,18 +54,16 @@ fn get_instantiation<'a>(
     instantiations: &'a mut HashMap<TaskInvocation, InstantiatedTask>,
     invocation: &TaskInvocation,
 ) -> &'a InstantiatedTask {
-    let task = tasks.get(&invocation.name)
+    let task = tasks
+        .get(&invocation.name)
         .expect("Task not found in the task list");
 
     instantiations
         .entry(invocation.clone())
-        .or_insert_with(|| {
-            task.instantiate(invocation.args.clone()).unwrap()
-        })
+        .or_insert_with(|| task.instantiate(invocation.args.clone()).unwrap())
 }
 
-#[derive(Debug, Clone)]
-#[derive(thiserror::Error)]
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum DependencyResolutionError {
     #[error("Topological sort error: {0}")]
     TopologicalSortError(#[from] TopologicalSortError),
@@ -70,8 +71,7 @@ pub enum DependencyResolutionError {
     TaskNotFound(String),
 }
 
-#[derive(Debug, Clone)]
-#[derive(thiserror::Error)]
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum TopologicalSortError {
     #[error("Cycle detected in the dependency graph: {0:?}")]
     CycleDetected(Vec<TaskInvocation>),

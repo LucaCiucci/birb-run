@@ -1,6 +1,5 @@
 use makefile_lossless::Makefile;
 
-
 pub fn foo() {
     let m = Makefile::from_reader(std::fs::File::open("Makefile").unwrap()).unwrap();
 

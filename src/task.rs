@@ -1,4 +1,8 @@
-use std::{collections::{BTreeMap, HashMap}, fmt::Display, path::PathBuf};
+use std::{
+    collections::{BTreeMap, HashMap},
+    fmt::Display,
+    path::PathBuf,
+};
 
 use handlebars::Handlebars;
 use serde::Serialize;
@@ -64,7 +68,7 @@ impl Task {
                 sources: Default::default(),
                 deps: Deps(Vec::new()),
                 steps: Default::default(),
-            }
+            },
         }
     }
 
@@ -91,9 +95,12 @@ pub struct TaskInvocation {
 impl TaskInvocation {
     pub fn instantiate(&self, handlebars: &mut Handlebars, args: &impl Serialize) -> Self {
         Self {
-            name: handlebars.render_template(&self.name, args)
+            name: handlebars
+                .render_template(&self.name, args)
                 .expect("Failed to render task name template"),
-            args: self.args.iter()
+            args: self
+                .args
+                .iter()
                 .map(|(k, v)| {
                     let rendered_value = instantiate_json_value(handlebars, v, args);
                     (k.clone(), rendered_value)
@@ -110,13 +117,18 @@ pub fn instantiate_json_value(
 ) -> Json {
     match value {
         Json::String(s) => {
-            let rendered = handlebars.render_template(s, args)
+            let rendered = handlebars
+                .render_template(s, args)
                 .expect("Failed to render string template");
             // reparse it, this is stupid and we should use a better way to understand if the rendered string expanded to something
             // like a number. An Idea could be to check if the template is just "{{}}"
             serde_json::from_str(&rendered).unwrap_or_else(|_| Json::String(rendered))
         }
-        Json::Array(arr) => Json::Array(arr.iter().map(|v| instantiate_json_value(handlebars, v, args)).collect()),
+        Json::Array(arr) => Json::Array(
+            arr.iter()
+                .map(|v| instantiate_json_value(handlebars, v, args))
+                .collect(),
+        ),
         Json::Object(obj) => {
             let mut new_obj = serde_json::Map::new();
             for (k, v) in obj {

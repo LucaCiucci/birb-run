@@ -4,7 +4,6 @@ use linked_hash_set::LinkedHashSet;
 
 use crate::{run::dependency_resolution::TopologicalSortError, task::TaskInvocation};
 
-
 /// Performs topological sort on the dependency graph to determine execution order
 /// Returns an error if a cycle is detected
 pub fn topological_sort(

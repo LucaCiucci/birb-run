@@ -1,14 +1,17 @@
 use yaml_rust::Yaml;
 
-use crate::task::{from_yaml::yaml_to_json, ArgType, Param, Task};
-
+use crate::task::{ArgType, Param, Task, from_yaml::yaml_to_json};
 
 pub fn parse_sources(task: &mut Task, sources: &Yaml) {
     task.body.sources = sources
         .as_vec()
         .expect("Expected 'sources' to be an array")
         .iter()
-        .map(|s| s.as_str().expect("Expected source to be a string").to_string())
+        .map(|s| {
+            s.as_str()
+                .expect("Expected source to be a string")
+                .to_string()
+        })
         .collect();
 }
 
@@ -17,17 +20,21 @@ pub fn parse_outputs(task: &mut Task, outputs: &Yaml) {
         .as_vec()
         .expect("Expected 'outputs' to be an array")
         .iter()
-        .map(|s| s.as_str().expect("Expected output to be a string").to_string())
+        .map(|s| {
+            s.as_str()
+                .expect("Expected output to be a string")
+                .to_string()
+        })
         .collect();
 }
 
-pub fn parse_params(
-    task: &mut Task,
-    args: &Yaml,
-) {
+pub fn parse_params(task: &mut Task, args: &Yaml) {
     let args = args.as_hash().expect("Expected 'args' to be a hash");
     for (key, value) in args {
-        let key = key.as_str().expect("Expected argument key to be a string").to_string();
+        let key = key
+            .as_str()
+            .expect("Expected argument key to be a string")
+            .to_string();
         task.params.insert(key, parse_param(value));
     }
 }
@@ -46,10 +53,7 @@ fn parse_param(value: &Yaml) -> Param {
             let default = hash
                 .get(&Yaml::String("default".into()))
                 .map(|v| yaml_to_json(v));
-            Param {
-                ty,
-                default,
-            }
+            Param { ty, default }
         }
         _ => panic!("Unsupported argument type"),
     }

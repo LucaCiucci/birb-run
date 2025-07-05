@@ -2,8 +2,6 @@ use yaml_rust::Yaml;
 
 use crate::{command::Command, task::Task};
 
-
-
 pub fn parse_steps(task: &mut Task, steps: &Yaml) {
     task.body.steps = steps
         .as_vec()
