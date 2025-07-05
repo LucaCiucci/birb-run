@@ -1,13 +1,14 @@
 use std::{
     collections::{BTreeMap, HashMap},
     fmt::Display,
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 use handlebars::Handlebars;
+use linked_hash_map::LinkedHashMap;
 use serde::Serialize;
 use serde_json::Value as Json;
-use yaml_rust::Yaml;
+use yaml_rust::{Yaml, YamlLoader};
 
 use crate::command::Command;
 
@@ -93,6 +94,13 @@ pub struct TaskInvocation {
 }
 
 impl TaskInvocation {
+    pub fn no_args(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            args: BTreeMap::new(),
+        }
+    }
+
     pub fn instantiate(&self, handlebars: &mut Handlebars, args: &impl Serialize) -> Self {
         Self {
             name: handlebars
@@ -137,6 +145,59 @@ pub fn instantiate_json_value(
             Json::Object(new_obj)
         }
         _ => value.clone(),
+    }
+}
+
+pub struct Tasks {
+    pub tasks: LinkedHashMap<String, Task>,
+}
+
+impl Tasks {
+    pub fn new() -> Self {
+        Self {
+            tasks: LinkedHashMap::new(),
+        }
+    }
+
+    pub fn load_yaml_taskfile(taskfile: impl AsRef<Path>) -> Self {
+        let taskfile = taskfile.as_ref();
+
+        let mut this = Self::new();
+
+        let docs = YamlLoader::load_from_str(
+            &std::fs::read_to_string(taskfile).expect("Failed to read 'tasks.yaml' file"),
+        )
+        .unwrap();
+
+        for doc in docs {
+            let doc = doc.as_hash().expect("Expected a YAML hash");
+
+            let tasks = doc
+                .get(&Yaml::String("tasks".into()))
+                .expect("Expected 'tasks' key")
+                .as_hash()
+                .expect("Expected 'tasks' to be a hash");
+
+            for (key, value) in tasks {
+                let key = key.as_str().expect("Expected task key to be a string");
+                let task = Task::from_yaml(&taskfile.parent().unwrap(), key, value);
+                this.tasks.insert(key.to_string(), task.clone());
+            }
+        }
+
+        this
+    }
+
+    pub fn invoke(&self, req: &TaskInvocation) {
+        crate::run::run(&self.tasks, req);
+    }
+
+    pub fn clean(&self, req: &TaskInvocation, recursive: bool) {
+        if recursive {
+            crate::run::clean(&self.tasks, req);
+        } else {
+            crate::run::clean_only(&self.tasks, req);
+        }
     }
 }
 

@@ -60,7 +60,7 @@ fn get_instantiation<'a>(
 
     instantiations
         .entry(invocation.clone())
-        .or_insert_with(|| task.instantiate(invocation.args.clone()).unwrap())
+        .or_insert_with(|| task.instantiate(&invocation.args).unwrap())
 }
 
 #[derive(Debug, Clone, thiserror::Error)]

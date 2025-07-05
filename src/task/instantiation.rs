@@ -11,7 +11,7 @@ use crate::{
 impl Task {
     pub fn instantiate(
         &self,
-        args: BTreeMap<String, Json>,
+        args: &BTreeMap<String, Json>,
     ) -> Result<InstantiatedTask, ArgumentsCheckError> {
         self.check_args(&args)?;
 

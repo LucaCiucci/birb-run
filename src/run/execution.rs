@@ -31,14 +31,16 @@ pub fn maybe_run_single_task(
 
     let mut context = trigger_checker.new_task_context();
 
-    if !trigger_checker.should_run(task, &mut context) {
-        println!("    {}\tup-to-date.", invocation.name.bold().cyan());
-    } else {
+    let should_run = trigger_checker.should_run(task, &mut context);
+
+    if should_run {
         println!("    {}\trunning...", invocation.name.bold().green());
         NaiveExecutor.execute(&task.body.workdir, &task.body.steps);
+    } else {
+        println!("    {}\tup-to-date.", invocation.name.bold().cyan());
     }
 
-    trigger_checker.check_outputs(task, &mut context);
+    trigger_checker.check_outputs(task, &mut context, should_run);
 
     return true;
 }
@@ -50,7 +52,10 @@ pub fn clean_single_task(
     let task = tasks
         .get(&invocation)
         .expect("Task not found in the task list");
+    clean_instantiated_task(task);
+}
 
+pub fn clean_instantiated_task(task: &InstantiatedTask) {
     for path in task.resolve_outputs() {
         let path: &Path = path.as_ref();
         let rel_path = diff_paths(

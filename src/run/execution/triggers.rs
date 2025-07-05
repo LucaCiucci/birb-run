@@ -15,7 +15,7 @@ pub trait TaskTriggerChecker {
     type TaskContext;
     fn new_task_context(&mut self) -> Self::TaskContext;
     fn should_run(&mut self, task: &InstantiatedTask, context: &mut Self::TaskContext) -> bool;
-    fn check_outputs(&mut self, task: &InstantiatedTask, context: &mut Self::TaskContext);
+    fn check_outputs(&mut self, task: &InstantiatedTask, context: &mut Self::TaskContext, executed: bool);
 }
 
 #[derive(Debug, Default)]
@@ -46,7 +46,7 @@ impl TaskTriggerChecker for NaiveTriggerChecker {
 
         sources_changed(task, output_hashes, &self.not_changed)
     }
-    fn check_outputs(&mut self, task: &InstantiatedTask, context: &mut Self::TaskContext) {
+    fn check_outputs(&mut self, task: &InstantiatedTask, context: &mut Self::TaskContext, executed: bool) {
         let output_hashes = context;
 
         let newest_source_timestamp = newest_input_timestamp(task, &self.not_changed)
@@ -70,22 +70,21 @@ impl TaskTriggerChecker for NaiveTriggerChecker {
             if metadata.is_file() {
                 // TODO we should also check if timestamp changed: if not, then
                 // there is no point in reading it again and checking hash!
-                let hash = hash_file(path);
                 if let Some(prev_hash) = output_hashes.get(path) {
                     if let Some(previously_not_changed) = self.not_changed.get(path) {
                         // This is bad, it means that some other task invocation
                         // modified this same output file.
                         // It is not good to have more task to have the same output,
                         // we should issue a warning.
-                        if *previously_not_changed {
+                        if !*previously_not_changed {
                             // Anyway, if it did change in some other task, we certainly
                             // cannot un-change it so we do nothing.
                         } else {
-                            self.not_changed.insert(path.into(), &hash == prev_hash);
+                            self.not_changed.insert(path.into(), !executed || &hash_file(path) == prev_hash);
                         }
                     } else {
                         // TODO avoid repetition
-                        self.not_changed.insert(path.into(), &hash == prev_hash);
+                        self.not_changed.insert(path.into(), !executed || &hash_file(path) == prev_hash);
                     }
                 } else {
                     // Again, we should issue a waring if already present.
