@@ -1,0 +1,40 @@
+tasks:
+  car:
+    description: Build a car
+    deps:
+      - task: engine
+        with: # or args
+          configuration: v8
+    sources:
+    - plan.txt
+    - engine-v8.yaml
+    outputs:
+    - car.yaml
+    steps:
+    - run: echo "This is a car recipe"
+    - run: echo "It generates a car.yaml file"
+    - echo car.yaml > car.yaml
+
+  engine:
+    description: Build an engine
+    params:
+      configuration:
+        type: [v6, v8]
+        default: v6
+    deps:
+      - task: workbench
+    sources:
+    - engine_plan.txt
+    - workbench.yaml
+    outputs:
+    - engine-{{ configuration }}.yaml
+    steps:
+    - echo "Building engine with configuration {{ configuration }}"
+    - 'echo "cfg: {{ configuration }}" > engine-{{ configuration }}.yaml'
+
+  workbench:
+    #phony: true
+    outputs:
+    - workbench.yaml
+    steps:
+    - echo "Workbench prepared at " $(date) > workbench.yaml
