@@ -15,6 +15,10 @@ pub fn parse_task(workdir: impl Into<PathBuf>, name: &str, value: &Yaml) -> Task
 
     task.body.workdir = workdir.into();
 
+    if let Some(description) = value.get(&Yaml::String("description".into())) {
+        task.description = Some(description.as_str().expect("Expected 'description' to be a string").to_string());
+    }
+
     if let Some(value) = value.get(&Yaml::String("workdir".into())) {
         task.body.workdir =
             PathBuf::from(value.as_str().expect("Expected 'workdir' to be a string"));

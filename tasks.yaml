@@ -1,6 +1,9 @@
 tasks:
   car:
-    description: Build a car
+    description: |
+      Build a **car**
+
+      This is a *very* long **description** for the `car` ***task***.
     deps:
       - task: engine
         with: # or args
