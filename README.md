@@ -1,10 +1,14 @@
 # birb-run
 Next level task runner (attempt)
 
+> [!IMPORTANT]
+> This is a WIP and I'm currently only developing it as a
+> sub-[`xtask`](https://github.com/matklad/cargo-xtask) for another project ([nm4p](https://github.com/LucaCiucci/nm4p) course final project).
+
 ## Core concepts
 
-- [**task**](#task): A task is a unit of work that can be executed. It can have _dependencies_, _parameters_, and _steps_. `task(args; sources) -> outputs`
-- **target**: Is just a task with where the output is the name of the target. `target -> task`
+- [**task**](#task): a unit of work that can be executed. It can have _dependencies_, _parameters_, and _steps_
+- **target**: a _task_ with where the output is the name of the target
 
 ### Task
 
@@ -24,6 +28,7 @@ Fully instantiated tasks can then be used for execution.
 
 ## Compatibility
 
-- make
-- Task
-- just
+- [ ] make
+- [ ] Task
+- [ ] just
+- [ ] xtask

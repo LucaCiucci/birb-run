@@ -1,4 +1,6 @@
-use std::{borrow::Borrow, path::Path};
+use std::{borrow::Borrow, io::{BufRead}, path::Path};
+use std::sync::mpsc;
+use std::thread;
 
 use crate::{command::Command, run::execution::CommandExecutor};
 
@@ -9,29 +11,67 @@ impl CommandExecutor for NaiveExecutor {
         &self,
         pwd: impl AsRef<Path>,
         commands: impl IntoIterator<Item = C>,
+        mut output_handler: impl FnMut(&str),
     ) {
         for command in commands {
             match command.borrow() {
-                Command::Shell(cmd) => Self::exec_shell(&pwd, &cmd),
+                Command::Shell(cmd) => Self::exec_shell(&pwd, &cmd, &mut output_handler),
             }
         }
     }
 }
 
 impl NaiveExecutor {
-    fn exec_shell(pwd: impl AsRef<Path>, cmd: &str) {
-        let output = std::process::Command::new("sh")
+    fn exec_shell(pwd: impl AsRef<Path>, cmd: &str, mut output_handler: impl FnMut(&str)) {
+        let mut child = std::process::Command::new("sh")
             .arg("-c")
             .arg(cmd)
             .current_dir(pwd)
-            .stdout(std::process::Stdio::inherit())
-            .stderr(std::process::Stdio::inherit())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
             .stdin(std::process::Stdio::null())
-            .output()
+            .spawn()
             .expect("Failed to execute command");
 
-        if !output.status.success() {
-            panic!("Command '{}' failed with exit code: {}", cmd, output.status);
+        let stdout = child.stdout.take().expect("Failed to capture stdout");
+        let stderr = child.stderr.take().expect("Failed to capture stderr");
+
+        let stdout_reader = std::io::BufReader::new(stdout);
+        let stderr_reader = std::io::BufReader::new(stderr);
+
+        let (tx, rx) = mpsc::channel();
+
+        // Spawn thread for stdout
+        let tx_stdout = tx.clone();
+        thread::spawn(move || {
+            for line in stdout_reader.lines() {
+                if let Ok(line) = line {
+                    tx_stdout.send(line).expect("Failed to send stdout line");
+                }
+            }
+        });
+
+        // Spawn thread for stderr
+        thread::spawn(move || {
+            for line in stderr_reader.lines() {
+                if let Ok(line) = line {
+                    tx.send(line).expect("Failed to send stderr line");
+                }
+            }
+        });
+
+        // Process lines from both stdout and stderr
+        loop {
+            if let Ok(line) = rx.recv() {
+                output_handler(&line);
+            }
+
+            if let Some(status) = child.try_wait().expect("Failed to query child process status") {
+                if !status.success() {
+                    panic!("Command '{}' failed with exit code: {}", cmd, status);
+                }
+                break; // Exit the loop if the child process has finished
+            }
         }
     }
 }

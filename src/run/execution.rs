@@ -17,6 +17,7 @@ pub trait CommandExecutor {
         &self,
         pwd: impl AsRef<Path>,
         commands: impl IntoIterator<Item = C>,
+        output_handler: impl FnMut(&str),
     );
 }
 
@@ -24,6 +25,7 @@ pub fn maybe_run_single_task(
     tasks: &HashMap<TaskInvocation, InstantiatedTask>,
     invocation: &TaskInvocation,
     trigger_checker: &mut impl TaskTriggerChecker,
+    mut output_handler: impl FnMut(&str),
 ) -> bool {
     let task = tasks
         .get(&invocation)
@@ -34,10 +36,16 @@ pub fn maybe_run_single_task(
     let should_run = trigger_checker.should_run(task, &mut context);
 
     if should_run {
-        println!("    {}\trunning...", invocation.name.bold().green());
-        NaiveExecutor.execute(&task.body.workdir, &task.body.steps);
+        let args = invocation
+            .args
+            .iter()
+            .map(|(k, v)| format!("{}={}", k, &format!("{:.10}", v)))
+            .collect::<Vec<_>>()
+            .join(" ");
+        output_handler(&format!("    {} {args}\trunning...", invocation.name.bold().green()));
+        NaiveExecutor.execute(&task.body.workdir, &task.body.steps, output_handler);
     } else {
-        println!("    {}\tup-to-date.", invocation.name.bold().cyan());
+        output_handler(&format!("    {}\tup-to-date.", invocation.name.bold().cyan()));
     }
 
     trigger_checker.check_outputs(task, &mut context, should_run);
