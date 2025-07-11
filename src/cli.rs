@@ -54,10 +54,10 @@ pub struct CleanOnly {
     task: String,
 }
 
-pub fn main(args: &Cli) {
+pub fn main(args: &Cli) -> anyhow::Result<()> {
     let cwd = std::env::current_dir().expect("Failed to get current directory");
 
-    let (workspace, tasks_id) = Workspace::from_main(cwd);
+    let (workspace, tasks_id) = Workspace::from_main(cwd)?;
     let tasks = workspace.get(&tasks_id).expect("Failed to get taskfile from workspace");
 
     match args {
@@ -68,7 +68,7 @@ pub fn main(args: &Cli) {
     }
 }
 
-fn list(tasks: &Taskfile, args: &List) {
+fn list(tasks: &Taskfile, args: &List) -> anyhow::Result<()> {
     for task in tasks.tasks.values() {
         let help = || task_short(task)
             .map(|s| format!("# {}", termimad::inline(&s)).green())
@@ -103,6 +103,8 @@ fn list(tasks: &Taskfile, args: &List) {
             }
         }
     }
+
+    Ok(())
 }
 
 fn task_short(task: &Task) -> Option<String> {

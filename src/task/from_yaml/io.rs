@@ -1,6 +1,6 @@
 use yaml_rust::Yaml;
 
-use crate::task::{ArgType, Param, Task, from_yaml::yaml_to_json};
+use crate::task::{from_yaml::{yaml_to_json, YamlToJsonError}, ArgType, Param, Task};
 
 pub fn parse_sources(task: &mut Task, sources: &Yaml) {
     task.body.sources = sources
@@ -28,38 +28,78 @@ pub fn parse_outputs(task: &mut Task, outputs: &Yaml) {
         .collect();
 }
 
-pub fn parse_params(task: &mut Task, args: &Yaml) {
-    let args = args.as_hash().expect("Expected 'args' to be a hash");
+#[derive(Debug)]
+#[derive(thiserror::Error)]
+pub enum ParamParsingError {
+    #[error("Invalid parameters, expected a map")]
+    NotAHash,
+    #[error("Invalid parameter key, expected a string but got: {0:?}")]
+    InvalidKey(Yaml),
+    #[error("Invalid parameter object for `{0}`: {1}")]
+    InvalidParameter(String, InvalidParam),
+}
+
+pub fn parse_params(task: &mut Task, args: &Yaml) -> Result<(), ParamParsingError> {
+    let args = args
+        .as_hash()
+        .ok_or(ParamParsingError::NotAHash)?;
     for (key, value) in args {
         let key = key
             .as_str()
-            .expect("Expected argument key to be a string")
+            .ok_or_else(|| ParamParsingError::InvalidKey(key.clone()))?
             .to_string();
-        task.params.insert(key, parse_param(value));
+        let value = parse_param(value)
+            .map_err(|e| ParamParsingError::InvalidParameter(key.clone(), e))?;
+        task.params.insert(key, value);
     }
+    Ok(())
 }
 
-fn parse_param(value: &Yaml) -> Param {
-    match value {
+#[derive(Debug)]
+#[derive(thiserror::Error)]
+pub enum InvalidParam {
+    #[error("missing parameter type")]
+    MissingType,
+    #[error("invalid parameter type: {0}")]
+    InvalidType(#[from] ParamTypeError),
+    #[error("error converting default value for parameter `{0}`: {1}")]
+    DefaultValueConversion(String, YamlToJsonError),
+}
+
+fn parse_param(value: &Yaml) -> Result<Param, InvalidParam> {
+    let value = match value {
         Yaml::String(t) => Param {
-            ty: parse_param_type_str(t),
+            ty: parse_param_type_str(t)?,
             default: None,
         },
         Yaml::Hash(hash) => {
             let ty = hash
                 .get(&Yaml::String("type".into()))
-                .expect("Expected 'type' key in argument hash");
-            let ty = parse_param_type(ty);
+                .ok_or(InvalidParam::MissingType)?;
+            let ty = parse_param_type(ty)?;
             let default = hash
                 .get(&Yaml::String("default".into()))
-                .map(|v| yaml_to_json(v));
+                .map(|v| yaml_to_json(v)
+                    .map_err(|e| InvalidParam::DefaultValueConversion(ty.to_string(), e)))
+                .transpose()?;
             Param { ty, default }
         }
         _ => panic!("Unsupported argument type"),
-    }
+    };
+
+    Ok(value)
 }
 
-fn parse_param_type(t: &Yaml) -> ArgType {
+#[derive(Debug, Clone)]
+#[derive(thiserror::Error)]
+pub enum ParamTypeError {
+    #[error("Unknown type `{0}`")]
+    UnknownType(String),
+    #[error("Expected array options to be strings")]
+    OptionsNotStrings,
+}
+
+fn parse_param_type(t: &Yaml) -> Result<ArgType, ParamTypeError> {
     match t {
         Yaml::String(t) => parse_param_type_str(t),
         Yaml::Array(options) => parse_param_type_select(options),
@@ -67,24 +107,24 @@ fn parse_param_type(t: &Yaml) -> ArgType {
     }
 }
 
-fn parse_param_type_str(t: &str) -> ArgType {
+fn parse_param_type_str(t: &str) -> Result<ArgType, ParamTypeError> {
     match t {
-        "str" | "string" => ArgType::String,
-        "number" => ArgType::Number,
-        "bool" | "boolean" => ArgType::Boolean,
-        "path" => ArgType::Path,
+        "str" | "string" => Ok(ArgType::String),
+        "number" => Ok(ArgType::Number),
+        "bool" | "boolean" => Ok(ArgType::Boolean),
+        "path" => Ok(ArgType::Path),
         "array" => todo!(),
-        _ => panic!("Unsupported argument type: {t}"),
+        _ => Err(ParamTypeError::UnknownType(t.to_string())),
     }
 }
 
-fn parse_param_type_select(options: &[Yaml]) -> ArgType {
+fn parse_param_type_select(options: &[Yaml]) -> Result<ArgType, ParamTypeError> {
     let options = options
         .iter()
         .map(|opt| match opt {
-            Yaml::String(opt) => opt.clone(),
-            _ => panic!("Expected array options to be strings"),
+            Yaml::String(opt) => Ok(opt.clone()),
+            _ => Err(ParamTypeError::OptionsNotStrings),
         })
-        .collect();
-    ArgType::Select(options)
+        .collect::<Result<_, _>>()?;
+    Ok(ArgType::Select(options))
 }

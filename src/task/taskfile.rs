@@ -1,10 +1,10 @@
-use std::{fmt::Display, path::{Path, PathBuf}, sync::Arc};
+use std::{fmt::Display, fs::read_to_string, path::{Path, PathBuf}, sync::Arc};
 
 use linked_hash_map::LinkedHashMap;
 use pathdiff::diff_paths;
 use yaml_rust::{Yaml, YamlLoader};
 
-use crate::task::{Task, TaskInvocation, TaskRef, Workspace};
+use crate::task::{from_yaml::InvalidTaskObject, Task, TaskInvocation, TaskRef, Workspace};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum TaskfileId {
@@ -119,25 +119,34 @@ impl Taskfile {
         }
     }
 
-    pub fn parse_yaml(taskfile: impl AsRef<Path>) -> Self {
+    pub fn from_yaml_file(taskfile: impl AsRef<Path>) -> Result<Self, YamlLoadError> {
         let taskfile = taskfile.as_ref();
-        let taskfile_dir = taskfile.parent().expect("Taskfile must have a parent directory");
+        let taskfile_dir = taskfile
+            .parent()
+            .ok_or(YamlLoadError::NoParentDirectory(taskfile.to_path_buf()))?;
 
         let mut this = Self::new(TaskfileId::from_path(taskfile));
 
         let docs = YamlLoader::load_from_str(
-            &std::fs::read_to_string(taskfile).expect("Failed to read 'tasks.yaml' file"),
-        )
-        .unwrap();
+            &read_to_string(taskfile).map_err(YamlLoadError::FileReadError)?,
+        )?;
 
         for doc in docs {
-            let doc = doc.as_hash().expect("Expected a YAML hash");
+            let doc = doc
+                .as_hash()
+                .ok_or(YamlDocumentFormatError::DocumentIsNotHash)?;
 
             if let Some(imports) = doc.get(&Yaml::String("imports".into())) {
-                let imports = imports.as_hash().expect("Expected 'imports' to be a hash");
+                let imports = imports
+                    .as_hash()
+                    .ok_or(YamlDocumentFormatError::InvalidImportType)?;
                 for (key, value) in imports {
-                    let key = key.as_str().expect("Expected import key to be a string");
-                    let import_path = value.as_str().expect("Expected import value to be a string");
+                    let key = key
+                        .as_str()
+                        .ok_or_else(|| YamlDocumentFormatError::InvalidImportKey(key.clone()))?;
+                    let import_path = value
+                        .as_str()
+                        .ok_or_else(|| YamlDocumentFormatError::InvalidImportValue(value.clone()))?;
                     let import_path = PathBuf::from(import_path);
                     let import_path = if import_path.is_absolute() {
                         import_path.clone()
@@ -150,29 +159,65 @@ impl Taskfile {
 
             let tasks = doc
                 .get(&Yaml::String("tasks".into()))
-                .expect("Expected 'tasks' key")
+                .ok_or(YamlDocumentFormatError::MissingTasksKey)?
                 .as_hash()
-                .expect("Expected 'tasks' to be a hash");
+                .ok_or(YamlDocumentFormatError::InvalidTasksType)?;
 
             for (key, value) in tasks {
-                let key = key.as_str().expect("Expected task key to be a string");
-                let task = Task::from_yaml(&taskfile.parent().unwrap(), key, value);
+                let key = key
+                    .as_str()
+                    .ok_or_else(|| YamlDocumentFormatError::InvalidTaskKey(key.clone()))?;
+                let task = Task::from_yaml(&this.dir, key, value)
+                    .map_err(|e| YamlDocumentFormatError::InvalidTaskObject(key.to_string(), e))?;
                 this.tasks.insert(key.to_string(), task.clone());
             }
         }
 
-        this
+        Ok(this)
     }
 
-    pub fn invoke(&self, workspace: &Workspace, req: &TaskInvocation<TaskRef>) {
-        crate::run::run(workspace, &self, req);
+    pub fn invoke(&self, workspace: &Workspace, req: &TaskInvocation<TaskRef>) -> anyhow::Result<()> {
+        crate::run::run(workspace, &self, req)
     }
 
-    pub fn clean(&self, workspace: &Workspace, req: &TaskInvocation<TaskRef>, recursive: bool) {
+    pub fn clean(&self, workspace: &Workspace, req: &TaskInvocation<TaskRef>, recursive: bool) -> anyhow::Result<()> {
         if recursive {
-            crate::run::clean(workspace, &self, req);
+            crate::run::clean(workspace, &self, req)
         } else {
-            crate::run::clean_only(workspace, self, req);
+            crate::run::clean_only(workspace, self, req)
         }
     }
+}
+
+#[derive(Debug)]
+#[derive(thiserror::Error)]
+pub enum YamlLoadError {
+    #[error("Failed to parse YAML: {0}")]
+    YamlParseError(#[from] yaml_rust::ScanError),
+    #[error("Failed to read YAML file: {0}")]
+    NoParentDirectory(PathBuf),
+    #[error("Failed to read YAML file: {0}")]
+    FileReadError(std::io::Error),
+    #[error("Invalid YAML document: {0}")]
+    Format(#[from] YamlDocumentFormatError),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum YamlDocumentFormatError {
+    #[error("Document is not a map")]
+    DocumentIsNotHash,
+    #[error("Invalid import object, expected a map")]
+    InvalidImportType,
+    #[error("Invalid import key, should be a string but got: {0:?}")]
+    InvalidImportKey(Yaml),
+    #[error("Invalid import value, expected a path but got: {0:?}")]
+    InvalidImportValue(Yaml),
+    #[error("Missing 'tasks' key in the document")]
+    MissingTasksKey,
+    #[error("Invalid `tasks` object, expected a map")]
+    InvalidTasksType,
+    #[error("Invalid task key, expected a string but got: {0:?}")]
+    InvalidTaskKey(Yaml),
+    #[error("Invalid task object for `{0}`: {1}")]
+    InvalidTaskObject(String, InvalidTaskObject),
 }

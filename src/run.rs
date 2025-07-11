@@ -15,7 +15,7 @@ pub fn run(
     workspace: &Workspace,
     current: &Taskfile,
     req: &TaskInvocation<TaskRef>,
-) {
+) -> anyhow::Result<()> {
     let (deps_graph, instantiations) = build_dependency_graph(workspace, current, req);
 
     let sorted = topological_sort(&deps_graph).unwrap();
@@ -36,13 +36,14 @@ pub fn run(
         );
     }
     bar.finish_with_message("All tasks completed");
+    Ok(())
 }
 
 pub fn clean(
     workspace: &Workspace,
     current: &Taskfile,
     req: &TaskInvocation<TaskRef>,
-) {
+) -> anyhow::Result<()> {
     let (deps_graph, instatiations) = build_dependency_graph(workspace, current, req);
 
     let sorted = topological_sort(&deps_graph).unwrap();
@@ -52,13 +53,14 @@ pub fn clean(
             println!("{}", output);
         });
     }
+    Ok(())
 }
 
 pub fn clean_only(
     workspace: &Workspace,
     current: &Taskfile,
     req: &TaskInvocation<TaskRef>,
-) {
+) -> anyhow::Result<()> {
     let task = workspace.resolve_task(current, &req.r#ref)
         .expect("Task not found in the task list").1
         .instantiate(&req.args)
@@ -67,4 +69,5 @@ pub fn clean_only(
     clean_instantiated_task(current, &task, |output| {
         println!("{}", output);
     });
+    Ok(())
 }

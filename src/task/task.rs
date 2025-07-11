@@ -2,7 +2,7 @@ use std::{collections::HashMap, path::PathBuf};
 
 use yaml_rust::Yaml;
 
-use crate::{command::Command, task::{from_yaml, params::Param, TaskInvocation, TaskRef}};
+use crate::{command::Command, task::{from_yaml::{self, InvalidTaskObject}, params::Param, TaskInvocation, TaskRef}};
 
 
 #[derive(Debug, Clone)]
@@ -66,7 +66,7 @@ impl Task {
         }
     }
 
-    pub fn from_yaml(workdir: impl Into<PathBuf>, name: &str, value: &Yaml) -> Self {
+    pub fn from_yaml(workdir: impl Into<PathBuf>, name: &str, value: &Yaml) -> Result<Self, InvalidTaskObject> {
         from_yaml::parse_task(workdir, name, value)
     }
 }

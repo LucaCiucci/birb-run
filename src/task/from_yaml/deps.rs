@@ -1,8 +1,19 @@
 use yaml_rust::Yaml;
 
-use crate::task::{from_yaml::yaml_to_json, Dep, Task, TaskInvocation, TaskRef};
+use crate::task::{from_yaml::{yaml_to_json, YamlToJsonError}, Dep, Task, TaskInvocation, TaskRef};
 
-pub fn parse_deps(task: &mut Task, deps: &Yaml) {
+#[derive(Debug)]
+#[derive(thiserror::Error)]
+pub enum DepParsingError {
+    #[error("Invalid arguments, expected a map")]
+    ArgumentsNotAHash,
+    #[error("Invalid argument key, expected a string but got: {0:?}")]
+    InvalidArgumentKey(Yaml),
+    #[error("argument conversion error for `{0}`: {1}")]
+    ArgumentConversionError(String, YamlToJsonError),
+}
+
+pub fn parse_deps(task: &mut Task, deps: &Yaml) -> Result<(), DepParsingError> {
     match deps {
         Yaml::Array(deps) => {
             for value in deps {
@@ -26,16 +37,16 @@ pub fn parse_deps(task: &mut Task, deps: &Yaml) {
 
                         if let Some(args) = value.get(&Yaml::String("with".into())) {
                             let Yaml::Hash(args) = args else {
-                                panic!("expected arguments to be a hash");
+                                return Err(DepParsingError::ArgumentsNotAHash);
                             };
                             for (arg_key, arg_value) in args {
-                                dep.invocation.args.insert(
-                                    arg_key
-                                        .as_str()
-                                        .expect("Expected argument key to be a string")
-                                        .to_string(),
-                                    yaml_to_json(arg_value),
-                                );
+                                let arg_key = arg_key
+                                    .as_str()
+                                    .ok_or_else(|| DepParsingError::InvalidArgumentKey(arg_key.clone()))?
+                                    .to_string();
+                                let value = yaml_to_json(arg_value)
+                                    .map_err(|e| DepParsingError::ArgumentConversionError(arg_key.clone(), e))?;
+                                dep.invocation.args.insert(arg_key, value);
                             }
                         }
 
@@ -48,4 +59,6 @@ pub fn parse_deps(task: &mut Task, deps: &Yaml) {
         }
         _ => panic!("Expected array"),
     }
+
+    Ok(())
 }

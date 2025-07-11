@@ -1,6 +1,6 @@
 use std::{collections::HashMap, path::{Path, PathBuf}};
 
-use crate::task::{ResolvedTaskInvocation, Task, TaskInvocation, TaskRef, Taskfile, TaskfileId, TaskfileImportRef};
+use crate::task::{ResolvedTaskInvocation, Task, TaskInvocation, TaskRef, Taskfile, TaskfileId, TaskfileImportRef, YamlLoadError};
 
 #[derive(Debug, Clone, Default)]
 pub struct Workspace {
@@ -8,10 +8,10 @@ pub struct Workspace {
 }
 
 impl Workspace {
-    pub fn from_main(path: impl Into<PathBuf>) -> (Self, TaskfileId) {
+    pub fn from_main(path: impl Into<PathBuf>) -> Result<(Self, TaskfileId), WorkspaceLoadError> {
         let mut workspace = Self::default();
-        let id = workspace.load_taskfile(path);
-        (workspace, id)
+        let id = workspace.load_taskfile(path)?;
+        Ok((workspace, id))
     }
 
     pub fn get<'a>(&'a self, id: &TaskfileId) -> Option<&'a Taskfile> {
@@ -23,15 +23,18 @@ impl Workspace {
     }
 
     // TOOD lazy load of imports?
-    pub fn load_taskfile(&mut self, path: impl Into<PathBuf>) -> TaskfileId {
+    pub fn load_taskfile(&mut self, path: impl Into<PathBuf>) -> Result<TaskfileId, WorkspaceLoadError> {
         let path = path.into();
-        let taskfile_path = Taskfile::find_taskfile(&path).canonicalize().unwrap();
+        let taskfile_path = Taskfile::find_taskfile(&path)
+            .canonicalize()
+            .map_err(|_| WorkspaceLoadError::Canonicalize(path.clone()))?;
 
         if let Some(id) = self.get_id_from_path(&taskfile_path) {
-            return id;
+            return Ok(id);
         }
 
-        let tasks = Taskfile::parse_yaml(&taskfile_path);
+        let tasks = Taskfile::from_yaml_file(&taskfile_path)
+            .map_err(|e| WorkspaceLoadError::Yaml(taskfile_path.clone(), e))?;
         let mut imports = tasks.imports.clone();
         let id = TaskfileId::from_path(taskfile_path.clone());
 
@@ -43,14 +46,18 @@ impl Workspace {
             match import {
                 TaskfileImportRef::Resolved(id) => assert!(self.tasks.contains_key(&id), "Resolved import not found in workspace"),
                 TaskfileImportRef::Unresolved(import_path) => {
-                    let imported = self.load_taskfile(import_path.as_path());
+                    let imported = self.load_taskfile(import_path.as_path())?;
                     *import = TaskfileImportRef::Resolved(imported);
                 }
             }
         }
-        self.tasks.get_mut(&id).unwrap().imports = imports;
+        self
+            .tasks
+            .get_mut(&id)
+            .expect("Failed to get taskfile that was just inserted")
+            .imports = imports;
 
-        id
+        Ok(id)
     }
 
     pub fn resolve_task<'a>(&'a self, current: &'a Taskfile, r#ref: &TaskRef) -> Option<(&'a Taskfile, &'a Task)> {
@@ -82,4 +89,13 @@ impl Workspace {
         let task = tasks.tasks.get(&invocation.r#ref.name)?;
         Some((tasks, task))
     }
+}
+
+
+#[derive(Debug, thiserror::Error)]
+pub enum WorkspaceLoadError {
+    #[error("Failed to canonicalize taskfile path: {0}")]
+    Canonicalize(PathBuf),
+    #[error("Failed to load taskfile from {0}: {1}")]
+    Yaml(PathBuf, YamlLoadError),
 }
