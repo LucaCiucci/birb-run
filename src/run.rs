@@ -22,7 +22,7 @@ pub fn run(
 
     let mut trigger_checker = NaiveTriggerChecker::default();
     let bar = ProgressBar::new(sorted.len() as u64);
-    bar.set_style(ProgressStyle::with_template("msg [{elapsed_precise}] [{bar:40.green/white}] {pos:>7}/{len:7} {msg}")
+    bar.set_style(ProgressStyle::with_template("[{elapsed_precise}] [{bar:40.green/white}] {pos:>7}/{len:7} {msg}")
         .unwrap()
         .progress_chars("=>-"));
     for invocation in sorted.iter().rev() {
@@ -32,7 +32,7 @@ pub fn run(
             &instantiations,
             invocation,
             &mut trigger_checker,
-            |output| bar.println(output),
+            |output| bar.suspend(|| println!("{output}")),
         );
     }
     bar.finish_with_message("All tasks completed");
