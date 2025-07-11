@@ -2,13 +2,13 @@ use std::collections::{HashMap, HashSet};
 
 use linked_hash_set::LinkedHashSet;
 
-use crate::{run::dependency_resolution::TopologicalSortError, task::TaskInvocation};
+use crate::{run::dependency_resolution::TopologicalSortError, task::{ResolvedTaskInvocation}};
 
 /// Performs topological sort on the dependency graph to determine execution order
 /// Returns an error if a cycle is detected
 pub fn topological_sort(
-    graph: &HashMap<TaskInvocation, LinkedHashSet<TaskInvocation>>,
-) -> Result<Vec<TaskInvocation>, TopologicalSortError> {
+    graph: &HashMap<ResolvedTaskInvocation, LinkedHashSet<ResolvedTaskInvocation>>,
+) -> Result<Vec<ResolvedTaskInvocation>, TopologicalSortError> {
     let mut result = Vec::new();
     let mut visited = HashSet::new();
     let mut visiting = HashSet::new(); // For cycle detection
@@ -27,11 +27,11 @@ pub fn topological_sort(
 
 /// Recursive helper function for topological sort using DFS
 fn visit_node(
-    node: &TaskInvocation,
-    graph: &HashMap<TaskInvocation, LinkedHashSet<TaskInvocation>>,
-    visited: &mut HashSet<TaskInvocation>,
-    visiting: &mut HashSet<TaskInvocation>,
-    result: &mut Vec<TaskInvocation>,
+    node: &ResolvedTaskInvocation,
+    graph: &HashMap<ResolvedTaskInvocation, LinkedHashSet<ResolvedTaskInvocation>>,
+    visited: &mut HashSet<ResolvedTaskInvocation>,
+    visiting: &mut HashSet<ResolvedTaskInvocation>,
+    result: &mut Vec<ResolvedTaskInvocation>,
 ) -> Result<(), TopologicalSortError> {
     if visiting.contains(node) {
         // We've found a cycle - reconstruct the cycle path
@@ -60,10 +60,10 @@ fn visit_node(
 
 /// Reconstructs a cycle path for error reporting
 fn reconstruct_cycle(
-    start: &TaskInvocation,
-    graph: &HashMap<TaskInvocation, LinkedHashSet<TaskInvocation>>,
-    visiting: &HashSet<TaskInvocation>,
-) -> Vec<TaskInvocation> {
+    start: &ResolvedTaskInvocation,
+    graph: &HashMap<ResolvedTaskInvocation, LinkedHashSet<ResolvedTaskInvocation>>,
+    visiting: &HashSet<ResolvedTaskInvocation>,
+) -> Vec<ResolvedTaskInvocation> {
     let mut cycle = vec![start.clone()];
     let mut current = start;
 

@@ -1,7 +1,7 @@
 use clap::Parser;
 use colored::Colorize;
 
-use crate::task::{Task, TaskInvocation, Tasks};
+use crate::task::{Task, TaskInvocation, TaskRef, Taskfile, Workspace};
 
 /// Command-line interface for the birb task runner.
 ///
@@ -37,12 +37,14 @@ pub struct List {
 /// Run a task
 #[derive(Parser, Debug)]
 pub struct Run {
+    #[clap(default_value = "default")]
     task: String,
 }
 
 /// Recursively clean a task
 #[derive(Parser, Debug)]
 pub struct Clean {
+    #[clap(default_value = "default")]
     task: String,
 }
 
@@ -55,17 +57,18 @@ pub struct CleanOnly {
 pub fn main(args: &Cli) {
     let cwd = std::env::current_dir().expect("Failed to get current directory");
 
-    let tasks = Tasks::load_yaml_taskfile(Tasks::find_taskfile(&cwd));
+    let (workspace, tasks_id) = Workspace::from_main(cwd);
+    let tasks = workspace.get(&tasks_id).expect("Failed to get taskfile from workspace");
 
     match args {
         Cli::List(args) => list(&tasks, args),
-        Cli::Run(args) => tasks.invoke(&TaskInvocation::no_args(&args.task)),
-        Cli::Clean(args) => tasks.clean(&TaskInvocation::no_args(&args.task), true),
-        Cli::CleanOnly(args) => tasks.clean(&TaskInvocation::no_args(&args.task), false),
+        Cli::Run(args) => tasks.invoke(&workspace, &TaskInvocation::no_args(TaskRef::parse(&args.task))),
+        Cli::Clean(args) => tasks.clean(&workspace, &TaskInvocation::no_args(TaskRef::parse(&args.task)), true),
+        Cli::CleanOnly(args) => tasks.clean(&workspace, &TaskInvocation::no_args(TaskRef::parse(&args.task)), false),
     }
 }
 
-fn list(tasks: &Tasks, args: &List) {
+fn list(tasks: &Taskfile, args: &List) {
     for task in tasks.tasks.values() {
         let help = || task_short(task)
             .map(|s| format!("# {}", termimad::inline(&s)).green())

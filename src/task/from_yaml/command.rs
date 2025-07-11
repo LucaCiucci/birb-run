@@ -3,7 +3,15 @@ use yaml_rust::Yaml;
 use crate::{command::Command, task::Task};
 
 pub fn parse_steps(task: &mut Task, steps: &Yaml) {
-    task.body.steps = steps
+    task.body.steps = parse_steps_impl(steps);
+}
+
+pub fn parse_clean(task: &mut Task, steps: &Yaml) {
+    task.body.clean = Some(parse_steps_impl(steps));
+}
+
+fn parse_steps_impl(steps: &Yaml) -> Vec<Command> {
+    steps
         .as_vec()
         .expect("Expected 'steps' to be an array")
         .iter()
@@ -22,5 +30,5 @@ pub fn parse_steps(task: &mut Task, steps: &Yaml) {
             }
             _ => todo!(),
         })
-        .collect();
+        .collect()
 }

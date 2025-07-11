@@ -1,6 +1,6 @@
 use yaml_rust::Yaml;
 
-use crate::task::{Dep, Task, TaskInvocation, from_yaml::yaml_to_json};
+use crate::task::{from_yaml::yaml_to_json, Dep, Task, TaskInvocation, TaskRef};
 
 pub fn parse_deps(task: &mut Task, deps: &Yaml) {
     match deps {
@@ -9,7 +9,7 @@ pub fn parse_deps(task: &mut Task, deps: &Yaml) {
                 let dep = match value {
                     Yaml::String(name) => Dep {
                         invocation: TaskInvocation {
-                            name: name.clone(),
+                            r#ref: TaskRef::parse(name),
                             args: Default::default(),
                         },
                     },
@@ -19,10 +19,7 @@ pub fn parse_deps(task: &mut Task, deps: &Yaml) {
                         };
                         let mut dep = Dep {
                             invocation: TaskInvocation {
-                                name: name
-                                    .as_str()
-                                    .expect("Expected dependency key to be a string")
-                                    .to_string(),
+                                r#ref: TaskRef::parse(name.as_str().expect("Expected dependency key to be a string")),
                                 args: Default::default(),
                             },
                         };

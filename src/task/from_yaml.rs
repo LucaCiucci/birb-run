@@ -40,6 +40,10 @@ pub fn parse_task(workdir: impl Into<PathBuf>, name: &str, value: &Yaml) -> Task
         command::parse_steps(&mut task, steps);
     }
 
+    if let Some(clean) = value.get(&Yaml::String("clean".into())) {
+        command::parse_clean(&mut task, clean);
+    }
+
     if let Some(sources) = value.get(&Yaml::String("sources".into())) {
         io::parse_sources(&mut task, sources);
     }

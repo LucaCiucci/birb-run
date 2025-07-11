@@ -1,0 +1,4 @@
+tasks:
+  crankshaft:
+    steps:
+    - echo "crankshaft ready"

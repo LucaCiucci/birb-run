@@ -56,6 +56,16 @@ impl Task {
                     .iter()
                     .map(|step| step.instantiate(&mut handlebars, &args))
                     .collect(),
+                clean: self
+                    .body
+                    .clean
+                    .as_ref()
+                    .map(|clean_steps| {
+                        clean_steps
+                            .iter()
+                            .map(|step| step.instantiate(&mut handlebars, &args))
+                            .collect()
+                    }),
             },
         })
     }

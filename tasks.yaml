@@ -1,3 +1,7 @@
+
+imports:
+  tools: tasks_2.yaml
+
 tasks:
   car:
     description: |
@@ -37,6 +41,8 @@ tasks:
 
   workbench:
     #phony: true
+    deps:
+    - task: tools:crankshaft
     outputs:
     - workbench.yaml
     steps:
