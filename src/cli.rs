@@ -1,4 +1,4 @@
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use colored::Colorize;
 
 use crate::task::{Task, TaskInvocation, TaskRef, Taskfile, Workspace};
@@ -32,6 +32,16 @@ pub struct List {
     /// Show full description for each task
     #[clap(short, long)]
     description: bool,
+
+    /// Output format
+    #[clap(short, long, value_enum)]
+    format: Option<OutputFormat>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(ValueEnum)]
+pub enum OutputFormat {
+    Json,
 }
 
 /// Run a task
@@ -71,6 +81,33 @@ pub fn main(args: &Cli) -> anyhow::Result<()> {
 }
 
 fn list(tasks: &Taskfile, args: &List) -> anyhow::Result<()> {
+    if let Some(format) = args.format {
+        if format != OutputFormat::Json {
+            todo!("")
+        }
+
+        #[derive(serde::Serialize)]
+        struct TaskEntry {
+            name: String,
+            short: Option<String>,
+            description: Option<String>,
+            // TODO params: Vec<(String, String)>,
+        }
+
+        let entries = tasks.tasks.values().map(|task| {
+            TaskEntry {
+                name: task.name.clone(),
+                short: task_short(task),
+                description: task.description.clone(),
+            }
+        }).collect::<Vec<_>>();
+
+        let json = serde_json::to_string(&entries)?;
+        println!("{}", json);
+
+        return Ok(())
+    }
+
     for task in tasks.tasks.values() {
         let help = || task_short(task)
             .map(|s| format!("# {}", termimad::inline(&s)).green())
