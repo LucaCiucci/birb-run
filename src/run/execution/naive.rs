@@ -4,24 +4,25 @@ use std::thread;
 
 use crate::{command::Command, run::execution::CommandExecutor};
 
-pub struct NaiveExecutor;
+pub struct NaiveExecutor<F: FnMut(&str)> {
+    pub output_handler: F,
+}
 
-impl CommandExecutor for NaiveExecutor {
+impl<F: FnMut(&str)> CommandExecutor for NaiveExecutor<F> {
     fn execute<C: Borrow<Command>>(
-        &self,
+        &mut self,
         pwd: impl AsRef<Path>,
         commands: impl IntoIterator<Item = C>,
-        mut output_handler: impl FnMut(&str),
     ) {
         for command in commands {
             match command.borrow() {
-                Command::Shell(cmd) => Self::exec_shell(&pwd, &cmd, &mut output_handler),
+                Command::Shell(cmd) => Self::exec_shell(&pwd, &cmd, &mut self.output_handler),
             }
         }
     }
 }
 
-impl NaiveExecutor {
+impl<F: FnMut(&str)> NaiveExecutor<F> {
     fn exec_shell(pwd: impl AsRef<Path>, cmd: &str, mut output_handler: impl FnMut(&str)) {
         let mut child = std::process::Command::new("sh")
             .arg("-c")

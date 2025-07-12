@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 use linked_hash_set::LinkedHashSet;
 
-use crate::task::{InstantiatedTask, ResolvedTaskInvocation, TaskInvocation, TaskRef, Taskfile, Workspace};
+use crate::task::{InstantiatedTask, InstantiationError, ResolvedTaskInvocation, TaskInvocation, TaskRef, Taskfile, Workspace};
 
 pub mod naive;
 pub mod topological_sort;
@@ -11,10 +11,10 @@ pub fn build_dependency_graph(
     workspace: &Workspace,
     current: &Taskfile,
     invocation: &TaskInvocation<TaskRef>,
-) -> (
+) -> Result<(
     HashMap<ResolvedTaskInvocation, LinkedHashSet<ResolvedTaskInvocation>>,
     HashMap<ResolvedTaskInvocation, InstantiatedTask>,
-) {
+), DependencyGraphConstructionError> {
     let mut queue: VecDeque<ResolvedTaskInvocation> = VecDeque::new();
 
     // Initialize the queue with the requested task invocation
@@ -35,7 +35,7 @@ pub fn build_dependency_graph(
             .entry(invocation.clone())
             .or_insert_with(LinkedHashSet::new);
 
-        let (tasks, task) = get_instantiation(workspace, &mut instantiations, &invocation);
+        let (tasks, task) = get_instantiation(workspace, &mut instantiations, &invocation)?;
 
         for dep in &task.body.deps.0 {
             let r = workspace.resolve_invocation(tasks, &dep.invocation);
@@ -47,23 +47,33 @@ pub fn build_dependency_graph(
         }
     }
 
-    (graph, instantiations)
+    Ok((graph, instantiations))
+}
+
+#[derive(Debug, Clone, thiserror::Error)]
+pub enum DependencyGraphConstructionError {
+    #[error("Failed to instantiate task: {0}")]
+    InstantiationError(#[from] InstantiationError),
 }
 
 fn get_instantiation<'a>(
     workspace: &'a Workspace,
     instantiations: &'a mut HashMap<ResolvedTaskInvocation, InstantiatedTask>,
     invocation: &ResolvedTaskInvocation,
-) -> (&'a Taskfile, &'a InstantiatedTask) {
+) -> Result<(&'a Taskfile, &'a InstantiatedTask), InstantiationError> {
     let (tasks, task) = workspace
         .resolve_invocation_task(&invocation)
         .expect(&format!("Task {} not found", invocation.r#ref.display_absolute()));
 
-    let instantiation = instantiations
-        .entry(invocation.clone())
-        .or_insert_with(|| task.instantiate(&invocation.args).unwrap());
+    let instantiation = {
+        let e = instantiations.entry(invocation.clone());
+        match e {
+            std::collections::hash_map::Entry::Occupied(entry) => entry.into_mut(),
+            std::collections::hash_map::Entry::Vacant(e) => e.insert(task.instantiate(&invocation.args)?),
+        }
+    };
 
-    (tasks, instantiation)
+    Ok((tasks, instantiation))
 }
 
 #[derive(Debug, Clone, thiserror::Error)]

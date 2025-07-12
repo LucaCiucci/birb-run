@@ -12,7 +12,7 @@ impl Task {
     pub fn instantiate(
         &self,
         args: &BTreeMap<String, Json>,
-    ) -> Result<InstantiatedTask, ArgumentsCheckError> {
+    ) -> Result<InstantiatedTask, InstantiationError> {
         self.check_args(&args)?;
 
         let mut handlebars = Handlebars::new();

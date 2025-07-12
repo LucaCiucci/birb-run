@@ -61,11 +61,13 @@ pub fn main(args: &Cli) -> anyhow::Result<()> {
     let tasks = workspace.get(&tasks_id).expect("Failed to get taskfile from workspace");
 
     match args {
-        Cli::List(args) => list(&tasks, args),
-        Cli::Run(args) => tasks.invoke(&workspace, &TaskInvocation::no_args(TaskRef::parse(&args.task))),
-        Cli::Clean(args) => tasks.clean(&workspace, &TaskInvocation::no_args(TaskRef::parse(&args.task)), true),
-        Cli::CleanOnly(args) => tasks.clean(&workspace, &TaskInvocation::no_args(TaskRef::parse(&args.task)), false),
-    }
+        Cli::List(args) => list(&tasks, args)?,
+        Cli::Run(args) => tasks.invoke(&workspace, &TaskInvocation::no_args(TaskRef::parse(&args.task)))?,
+        Cli::Clean(args) => tasks.clean(&workspace, &TaskInvocation::no_args(TaskRef::parse(&args.task)), true)?,
+        Cli::CleanOnly(args) => tasks.clean(&workspace, &TaskInvocation::no_args(TaskRef::parse(&args.task)), false)?,
+    };
+
+    Ok(())
 }
 
 fn list(tasks: &Taskfile, args: &List) -> anyhow::Result<()> {

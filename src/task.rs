@@ -2,6 +2,8 @@ mod from_yaml;
 
 mod instantiation;
 
+pub use instantiation::{ArgumentsCheckError, InstantiationError};
+
 mod invocation;
 mod params;
 mod task_ref;

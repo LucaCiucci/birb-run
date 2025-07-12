@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use linked_hash_set::LinkedHashSet;
 
-use crate::{run::dependency_resolution::TopologicalSortError, task::{ResolvedTaskInvocation}};
+use crate::{run::dependency_resolution::TopologicalSortError, task::ResolvedTaskInvocation};
 
 /// Performs topological sort on the dependency graph to determine execution order
 /// Returns an error if a cycle is detected
