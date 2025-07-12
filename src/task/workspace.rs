@@ -26,6 +26,7 @@ impl Workspace {
     pub fn load_taskfile(&mut self, path: impl Into<PathBuf>) -> Result<TaskfileId, WorkspaceLoadError> {
         let path = path.into();
         let taskfile_path = Taskfile::find_taskfile(&path)
+            .ok_or(WorkspaceLoadError::TaskfileNotFound)?
             .canonicalize()
             .map_err(|_| WorkspaceLoadError::Canonicalize(path.clone()))?;
 
@@ -94,6 +95,8 @@ impl Workspace {
 
 #[derive(Debug, thiserror::Error)]
 pub enum WorkspaceLoadError {
+    #[error("Taskfile not found in the current directory or any parent directory")]
+    TaskfileNotFound,
     #[error("Failed to canonicalize taskfile path: {0}")]
     Canonicalize(PathBuf),
     #[error("Failed to load taskfile from {0}: {1}")]

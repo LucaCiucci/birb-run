@@ -90,15 +90,15 @@ impl Taskfile {
     }
 
     /// Finds the taskfile in the current directory or any parent directory
-    pub fn find_taskfile(from: impl AsRef<Path>) -> PathBuf {
+    pub fn find_taskfile(from: impl AsRef<Path>) -> Option<PathBuf> {
         let mut path = from.as_ref().to_path_buf();
         if path.is_file() {
-            return path;
+            return Some(path);
         }
         loop {
             let file_path = path.join("tasks.yaml");
             if file_path.is_file() {
-                break file_path;
+                break Some(file_path);
             }
 
             // Try to find another "task.*" file that is executable, because taskfiles
@@ -114,7 +114,7 @@ impl Taskfile {
             //}
 
             if !path.pop() {
-                panic!("No 'tasks.yaml' found in the current directory or any parent directory");
+                break None;
             }
         }
     }
