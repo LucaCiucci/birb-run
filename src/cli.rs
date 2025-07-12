@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use clap::{Parser, ValueEnum};
 use colored::Colorize;
 
@@ -11,7 +13,19 @@ use crate::task::{Task, TaskInvocation, TaskRef, Taskfile, Workspace};
 /// dependency resolution and execution order automatically.
 #[derive(Parser, Debug)]
 #[clap(styles = cli_styles::CLAP_STYLES, verbatim_doc_comment)]
-pub enum Cli {
+pub struct Cli {
+    #[clap(subcommand)]
+    command: Command,
+
+    /// Path to the taskfile or search path.
+    /// If not provided, the runner will look for a
+    /// `Taskfile.yaml` in the current directory.
+    #[clap(short = 'f', long, value_name = "PATH")]
+    taskfile: Option<PathBuf>,
+}
+
+#[derive(Parser, Debug)]
+pub enum Command {
     List(List),
     Run(Run),
     Clean(Clean),
@@ -65,16 +79,22 @@ pub struct CleanOnly {
 }
 
 pub fn main(args: &Cli) -> anyhow::Result<()> {
-    let cwd = std::env::current_dir().expect("Failed to get current directory");
+    let cwd: PathBuf;
+    let path = if let Some(taskfile) = &args.taskfile {
+        taskfile
+    } else {
+        cwd = std::env::current_dir()?;
+        &cwd
+    };
 
-    let (workspace, tasks_id) = Workspace::from_main(cwd)?;
+    let (workspace, tasks_id) = Workspace::from_main(path)?;
     let tasks = workspace.get(&tasks_id).expect("Failed to get taskfile from workspace");
 
-    match args {
-        Cli::List(args) => list(&tasks, args)?,
-        Cli::Run(args) => tasks.invoke(&workspace, &TaskInvocation::no_args(TaskRef::parse(&args.task)))?,
-        Cli::Clean(args) => tasks.clean(&workspace, &TaskInvocation::no_args(TaskRef::parse(&args.task)), true)?,
-        Cli::CleanOnly(args) => tasks.clean(&workspace, &TaskInvocation::no_args(TaskRef::parse(&args.task)), false)?,
+    match &args.command {
+        Command::List(args) => list(&tasks, args)?,
+        Command::Run(args) => tasks.invoke(&workspace, &TaskInvocation::no_args(TaskRef::parse(&args.task)))?,
+        Command::Clean(args) => tasks.clean(&workspace, &TaskInvocation::no_args(TaskRef::parse(&args.task)), true)?,
+        Command::CleanOnly(args) => tasks.clean(&workspace, &TaskInvocation::no_args(TaskRef::parse(&args.task)), false)?,
     };
 
     Ok(())
