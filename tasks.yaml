@@ -1,3 +1,4 @@
+#!/usr/bin/env -S birb-task -f
 
 imports:
   tools: tasks_2.yaml
