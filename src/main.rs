@@ -1,4 +1,4 @@
-use birb_run::cli::Cli;
+use birb_task::cli::Cli;
 use clap::Parser;
 
 
@@ -7,6 +7,6 @@ fn main() -> anyhow::Result<()> {
 
     let args = Cli::parse();
 
-    birb_run::cli::main(&args)
+    birb_task::cli::main(&args)
 }
 
