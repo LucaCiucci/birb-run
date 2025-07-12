@@ -1,4 +1,4 @@
-use std::{path::PathBuf, str::FromStr};
+use std::{collections::HashSet, path::PathBuf, str::FromStr};
 
 use serde_json::{Number, Value as Json};
 use yaml_rust::Yaml;
@@ -24,6 +24,17 @@ pub enum InvalidTaskObject {
     InvalidDependencies(#[from] deps::DepParsingError),
     #[error("Invalid parameters: {0}")]
     InvalidParams(#[from] io::ParamParsingError),
+    #[error("Invalid steps: {0}")]
+    InvalidSteps(command::StepsParseError),
+    #[error("Invalid clean: {0}")]
+    InvalidClean(command::StepsParseError),
+    #[error("Invalid sources: {0}")]
+    InvalidSources(#[from] io::InvalidSources),
+    #[error("Invalid outputs: {0}")]
+    InvalidOutputs(#[from] io::InvalidOutputs),
+
+    #[error("Unknown keys in task object: {0:?}")]
+    UnusedKeys(Vec<String>),
 }
 
 pub fn parse_task(workdir: impl Into<PathBuf>, name: &str, value: &Yaml) -> Result<Task, InvalidTaskObject> {
@@ -34,12 +45,15 @@ pub fn parse_task(workdir: impl Into<PathBuf>, name: &str, value: &Yaml) -> Resu
 
     task.body.workdir = workdir.into();
 
+    let mut used_keys = HashSet::new();
+
     if let Some(description) = value.get(&Yaml::String("description".into())) {
         let description = description
             .as_str()
             .ok_or(InvalidTaskObject::InvalidDescriptionType)?
             .to_string();
         task.description = Some(description);
+        used_keys.insert("description");
     }
 
     if let Some(value) = value.get(&Yaml::String("workdir".into())) {
@@ -48,6 +62,7 @@ pub fn parse_task(workdir: impl Into<PathBuf>, name: &str, value: &Yaml) -> Resu
                 .as_str()
                 .ok_or(InvalidTaskObject::InvalidWorkdirType)?,
         );
+        used_keys.insert("workdir");
     }
 
     if let Some(value) = value.get(&Yaml::String("phony".into())) {
@@ -58,28 +73,50 @@ pub fn parse_task(workdir: impl Into<PathBuf>, name: &str, value: &Yaml) -> Resu
 
     if let Some(deps) = value.get(&Yaml::String("deps".into())) {
         deps::parse_deps(&mut task, deps)?;
+        used_keys.insert("deps");
     }
 
     if let Some(params) = value.get(&Yaml::String("params".into())) {
         io::parse_params(&mut task, params)?;
+        used_keys.insert("params");
     }
 
-    // TODO error handling from now on...
-
     if let Some(steps) = value.get(&Yaml::String("steps".into())) {
-        command::parse_steps(&mut task, steps);
+        command::parse_steps(&mut task, steps)
+            .map_err(InvalidTaskObject::InvalidSteps)?;
+        used_keys.insert("steps");
     }
 
     if let Some(clean) = value.get(&Yaml::String("clean".into())) {
-        command::parse_clean(&mut task, clean);
+        command::parse_clean(&mut task, clean)
+            .map_err(InvalidTaskObject::InvalidClean)?;
+        used_keys.insert("clean");
     }
 
     if let Some(sources) = value.get(&Yaml::String("sources".into())) {
-        io::parse_sources(&mut task, sources);
+        io::parse_sources(&mut task, sources)?;
+        used_keys.insert("sources");
     }
 
     if let Some(outputs) = value.get(&Yaml::String("outputs".into())) {
-        io::parse_outputs(&mut task, outputs);
+        io::parse_outputs(&mut task, outputs)?;
+        used_keys.insert("outputs");
+    }
+
+    let unused_keys: Vec<String> = value
+        .keys()
+        .filter_map(|k| {
+            let key_str = k.as_str()?;
+            if !used_keys.contains(key_str) {
+                Some(key_str.to_string())
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    if !unused_keys.is_empty() {
+        return Err(InvalidTaskObject::UnusedKeys(unused_keys));
     }
 
     Ok(task)
@@ -92,7 +129,8 @@ pub enum YamlToJsonError {
     InvalidNumber(serde_json::Error),
     #[error("Invalid key, not a string: {0:?}")]
     InvalidKey(Yaml),
-
+    #[error("Encountered a bad value")]
+    BadValue,
 }
 
 fn yaml_to_json(yaml: &Yaml) -> Result<Json, YamlToJsonError> {
@@ -114,8 +152,7 @@ fn yaml_to_json(yaml: &Yaml) -> Result<Json, YamlToJsonError> {
             Json::Object(obj)
         }
         Yaml::Alias(_) => todo!(),
-        Yaml::BadValue => panic!("Encountered a bad value in YAML"),
+        Yaml::BadValue => return Err(YamlToJsonError::BadValue),
     };
-
     Ok(r)
 }

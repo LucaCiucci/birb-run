@@ -2,30 +2,53 @@ use yaml_rust::Yaml;
 
 use crate::task::{from_yaml::{yaml_to_json, YamlToJsonError}, ArgType, Param, Task};
 
-pub fn parse_sources(task: &mut Task, sources: &Yaml) {
-    task.body.sources = sources
-        .as_vec()
-        .expect("Expected 'sources' to be an array")
-        .iter()
-        .map(|s| {
-            s.as_str()
-                .expect("Expected source to be a string")
-                .to_string()
-        })
-        .collect();
+#[derive(Debug)]
+#[derive(thiserror::Error)]
+pub enum InvalidSources {
+    #[error("Invalid sources, expected an array")]
+    NotAnArray,
+    #[error("Invalid source at index {0}, expected a string but got: {1:?}")]
+    NotAString(usize, Yaml),
 }
 
-pub fn parse_outputs(task: &mut Task, outputs: &Yaml) {
+pub fn parse_sources(task: &mut Task, sources: &Yaml) -> Result<(), InvalidSources> {
+    task.body.sources = sources
+        .as_vec()
+        .ok_or(InvalidSources::NotAnArray)?
+        .iter()
+        .enumerate()
+        .map(|(i, s)| {
+            s.as_str()
+                .ok_or_else(|| InvalidSources::NotAString(i, s.clone()))
+                .map(|s| s.to_string())
+        })
+        .collect::<Result<_, _>>()?;
+    Ok(())
+}
+
+#[derive(Debug)]
+#[derive(thiserror::Error)]
+pub enum InvalidOutputs {
+    #[error("Invalid outputs, expected an array")]
+    NotAnArray,
+    #[error("Invalid output at index {0}, expected a string but got: {1:?}")]
+    NotAString(usize, Yaml),
+}
+
+
+pub fn parse_outputs(task: &mut Task, outputs: &Yaml) -> Result<(), InvalidOutputs> {
     task.body.outputs.files = outputs
         .as_vec()
-        .expect("Expected 'outputs' to be an array")
+        .ok_or(InvalidOutputs::NotAnArray)?
         .iter()
-        .map(|s| {
+        .enumerate()
+        .map(|(i, s)| {
             s.as_str()
-                .expect("Expected output to be a string")
-                .to_string()
+                .ok_or_else(|| InvalidOutputs::NotAString(i, s.clone()))
+                .map(|s| s.to_string())
         })
-        .collect();
+        .collect::<Result<_, _>>()?;
+    Ok(())
 }
 
 #[derive(Debug)]
