@@ -7,6 +7,8 @@ Next level task runner (attempt)
 
 This is a draft of a task runner, similar to [`make`](https://www.gnu.org/software/make/), [`just`](https://just.systems/), or [`task`](https://taskfile.dev/). It aims to be a more modern and flexible alternative, with a focus on ease of use and correctness.
 
+[![asciicast](https://asciinema.org/a/59zfSVVv8BzgaPb9FbYi9ByYp.svg)](https://asciinema.org/a/59zfSVVv8BzgaPb9FbYi9ByYp)
+
 ## Overview
 
 `birb-run` lets you write _taskfiles_, which are usually YAML files that defines tasks and their dependencies, for example:
