@@ -26,12 +26,12 @@ impl Task {
                     .into(),
                 phony: self.body.phony,
                 outputs: Outputs {
-                    files: self
+                    paths: self
                         .body
                         .outputs
-                        .files
+                        .paths
                         .iter()
-                        .map(|file| handlebars.render_template(file, &args).unwrap())
+                        .map(|file| file.instantiate(&mut handlebars, args))
                         .collect(),
                 },
                 sources: self

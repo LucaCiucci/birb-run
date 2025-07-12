@@ -90,6 +90,11 @@ impl TaskTriggerChecker for NaiveTriggerChecker {
                     // Again, we should issue a waring if already present.
                     self.not_changed.entry(path.into()).or_insert(false);
                 }
+            } else if metadata.is_dir() {
+                // TODO recheck this
+                // TODO ...
+            } else {
+                // TODO ...
             }
 
             if let Some(newest_source_timestamp) = &newest_source_timestamp {

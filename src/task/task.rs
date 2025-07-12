@@ -1,5 +1,7 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, path::{Path, PathBuf}};
 
+use handlebars::Handlebars;
+use serde::Serialize;
 use yaml_rust::Yaml;
 
 use crate::{command::Command, task::{from_yaml::{self, InvalidTaskObject}, params::Param, TaskInvocation, TaskRef}};
@@ -28,12 +30,8 @@ impl InstantiatedTask {
         })
     }
 
-    pub fn resolve_outputs(&self) -> impl Iterator<Item = PathBuf> {
-        self.body.outputs.files.iter().map(|file| {
-            let mut path = self.body.workdir.clone();
-            path.push(file);
-            path
-        })
+    pub fn resolve_outputs(&self) -> impl Iterator<Item = OutputPath> {
+        self.body.outputs.paths.iter().map(move |file| file.resolve(&self.body.workdir))
     }
 }
 
@@ -57,7 +55,7 @@ impl Task {
             body: TaskBody {
                 workdir: PathBuf::new(),
                 phony: false,
-                outputs: Outputs { files: Vec::new() },
+                outputs: Outputs { paths: Vec::new() },
                 sources: Default::default(),
                 deps: Deps(Vec::new()),
                 steps: Default::default(),
@@ -82,5 +80,42 @@ pub struct Dep {
 
 #[derive(Debug, Clone)]
 pub struct Outputs {
-    pub files: Vec<String>,
+    pub paths: Vec<OutputPath>,
+}
+
+#[derive(Debug, Clone)]
+pub enum OutputPath {
+    File(String),
+    Directory(String),
+}
+
+impl OutputPath {
+    pub fn instantiate(&self, handlebars: &mut Handlebars, args: &impl Serialize) -> Self {
+        match self {
+            OutputPath::File(path) => OutputPath::File(handlebars.render_template(path, args).unwrap()),
+            OutputPath::Directory(path) => OutputPath::Directory(handlebars.render_template(path, args).unwrap()),
+        }
+    }
+
+    pub fn resolve(&self, workdir: &PathBuf) -> Self {
+        let mut path = workdir.clone();
+        match self {
+            OutputPath::File(file) => {
+                path.push(file);
+                OutputPath::File(path.to_string_lossy().to_string())
+            }
+            OutputPath::Directory(dir) => {
+                path.push(dir);
+                OutputPath::Directory(path.to_string_lossy().to_string())
+            }
+        }
+    }
+}
+
+impl AsRef<Path> for OutputPath {
+    fn as_ref(&self) -> &Path {
+        match self {
+            OutputPath::File(path) | OutputPath::Directory(path) => path.as_ref(),
+        }
+    }
 }

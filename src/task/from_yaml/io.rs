@@ -1,6 +1,6 @@
 use yaml_rust::Yaml;
 
-use crate::task::{from_yaml::{yaml_to_json, YamlToJsonError}, ArgType, Param, Task};
+use crate::task::{from_yaml::{yaml_to_json, YamlToJsonError}, ArgType, OutputPath, Param, Task};
 
 #[derive(Debug)]
 #[derive(thiserror::Error)]
@@ -37,7 +37,7 @@ pub enum InvalidOutputs {
 
 
 pub fn parse_outputs(task: &mut Task, outputs: &Yaml) -> Result<(), InvalidOutputs> {
-    task.body.outputs.files = outputs
+    task.body.outputs.paths = outputs
         .as_vec()
         .ok_or(InvalidOutputs::NotAnArray)?
         .iter()
@@ -45,7 +45,11 @@ pub fn parse_outputs(task: &mut Task, outputs: &Yaml) -> Result<(), InvalidOutpu
         .map(|(i, s)| {
             s.as_str()
                 .ok_or_else(|| InvalidOutputs::NotAString(i, s.clone()))
-                .map(|s| s.to_string())
+                .map(|s| if s.ends_with("/") {
+                    OutputPath::Directory(s.to_string())
+                } else {
+                    OutputPath::File(s.to_string())
+                })
         })
         .collect::<Result<_, _>>()?;
     Ok(())

@@ -6,7 +6,7 @@ use pathdiff::diff_paths;
 use crate::{
     command::Command,
     run::{execution::{naive::NaiveExecutor, triggers::TaskTriggerChecker}, TaskExecutionContext},
-    task::{InstantiatedTask, ResolvedTaskInvocation, Taskfile},
+    task::{InstantiatedTask, OutputPath, ResolvedTaskInvocation, Taskfile},
 };
 
 pub mod naive;
@@ -85,25 +85,32 @@ pub fn clean_instantiated_task(
         executor.execute(&task.body.workdir, clean_steps);
     }
 
-    for path in task.resolve_outputs() {
-        let path: &Path = path.as_ref();
+    for o in task.resolve_outputs() {
         let rel_path = diff_paths(
-            path,
+            o.as_ref(),
             std::env::current_dir().expect("Failed to get current directory"),
         )
-        .unwrap_or(path.to_path_buf());
+        .unwrap_or(o.as_ref().to_path_buf());
 
         // ! if it fails, it we will not delete the file because we return early
         // this is ok since we want to avoid deleting files that are not in the
         // current directory as it would be dangerous
-        let _rel_to_taskfile = path.strip_prefix(&tasks.dir)
+        let _rel_to_taskfile = o.as_ref().strip_prefix(&tasks.dir)
             .expect("Failed to compute relative path to taskfile directory");
 
-        if path.exists() {
-            std::fs::remove_file(path).map_err(ExecutionError::RemoveFileError)?;
-            println!("{}\t{}", rel_path.display(), "REMOVED".magenta());
-        } else {
-            println!("{}\t{}", rel_path.display(), "NOT FOUND".bright_black());
+        match o {
+            OutputPath::File(path) => if Path::new(&path).exists() {
+                std::fs::remove_file(path).map_err(ExecutionError::RemoveFileError)?;
+                println!("{}\t{}", rel_path.display(), "REMOVED".magenta());
+            } else {
+                println!("{}\t{}", rel_path.display(), "NOT FOUND".bright_black());
+            },
+            OutputPath::Directory(path) => if Path::new(&path).exists() {
+                std::fs::remove_dir_all(path).map_err(ExecutionError::RemoveFileError)?;
+                println!("{}\t{}", rel_path.display(), "REMOVED".magenta());
+            } else {
+                println!("{}\t{}", rel_path.display(), "NOT FOUND".bright_black());
+            },
         }
     }
 
