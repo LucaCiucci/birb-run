@@ -26,13 +26,17 @@ pub enum ExecutionError {
     TaskNotFound(ResolvedTaskInvocation),
     #[error("Failed to remove {0}")]
     RemoveFileError(std::io::Error),
+    #[error("Failed to build dependency graph: {0}")]
+    ShouldRunCheckError(anyhow::Error),
+    #[error("Output check failed: {0}")]
+    OutputCheckError(anyhow::Error),
 }
 
-pub fn maybe_run_single_task(
+pub fn maybe_run_single_task<T: TaskTriggerChecker, C: TaskExecutionContext>(
     tasks: &HashMap<ResolvedTaskInvocation, InstantiatedTask>,
     invocation: &ResolvedTaskInvocation,
-    trigger_checker: &mut impl TaskTriggerChecker,
-    mut execution_context: impl TaskExecutionContext,
+    trigger_checker: &mut T,
+    mut execution_context: C,
 ) -> Result<(), ExecutionError> {
     let task = tasks
         .get(&invocation)
@@ -40,7 +44,8 @@ pub fn maybe_run_single_task(
 
     let mut context = trigger_checker.new_task_context();
 
-    let should_run = trigger_checker.should_run(task, &mut context);
+    let should_run = trigger_checker.should_run(task, &mut context)
+        .map_err(|e| ExecutionError::ShouldRunCheckError(e.into()))?;
 
     if should_run {
         execution_context.run().execute(&task.body.workdir, &task.body.steps);
@@ -48,7 +53,8 @@ pub fn maybe_run_single_task(
         execution_context.up_to_date();
     }
 
-    trigger_checker.check_outputs(task, &mut context, should_run);
+    trigger_checker.check_outputs(task, &mut context, should_run)
+        .map_err(|e| ExecutionError::OutputCheckError(e.into()))?;
 
     Ok(())
 }

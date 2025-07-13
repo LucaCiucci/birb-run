@@ -1,9 +1,5 @@
 use std::{
-    collections::HashMap,
-    fs::File,
-    io::{BufReader, Read},
-    path::{Path, PathBuf},
-    time::SystemTime,
+    collections::HashMap, error::Error, fs::File, io::{BufReader, Read}, path::{Path, PathBuf}, time::SystemTime
 };
 
 use anyhow::anyhow;
@@ -13,9 +9,11 @@ use crate::task::InstantiatedTask;
 
 pub trait TaskTriggerChecker {
     type TaskContext;
+    type RunError: Error + Send + Sync + 'static;
+    type OutputCheckError: Error + Send + Sync + 'static;
     fn new_task_context(&mut self) -> Self::TaskContext;
-    fn should_run(&mut self, task: &InstantiatedTask, context: &mut Self::TaskContext) -> bool;
-    fn check_outputs(&mut self, task: &InstantiatedTask, context: &mut Self::TaskContext, executed: bool);
+    fn should_run(&mut self, task: &InstantiatedTask, context: &mut Self::TaskContext) -> Result<bool, Self::RunError>;
+    fn check_outputs(&mut self, task: &InstantiatedTask, context: &mut Self::TaskContext, executed: bool) -> Result<(), Self::OutputCheckError>;
 }
 
 #[derive(Debug, Default)]
@@ -25,10 +23,12 @@ pub struct NaiveTriggerChecker {
 
 impl TaskTriggerChecker for NaiveTriggerChecker {
     type TaskContext = HashMap<PathBuf, Hash>;
+    type RunError = RunError;
+    type OutputCheckError = OutputCheckError;
     fn new_task_context(&mut self) -> Self::TaskContext {
         Default::default()
     }
-    fn should_run(&mut self, task: &InstantiatedTask, context: &mut Self::TaskContext) -> bool {
+    fn should_run(&mut self, task: &InstantiatedTask, context: &mut Self::TaskContext) -> Result<bool, Self::RunError> {
         let output_hashes = context;
 
         let has_no_outputs = task.resolve_outputs().next().is_none();
@@ -36,33 +36,35 @@ impl TaskTriggerChecker for NaiveTriggerChecker {
 
         // If a command does not have any output, we assume it should always run.
         if has_no_outputs {
-            return true;
+            return Ok(true);
         }
 
         // If a command has no steps, it cannot be run.
         if has_no_command {
-            return false;
+            return Ok(false);
         }
 
-        sources_changed(task, output_hashes, &self.not_changed)
+        Ok(sources_changed(task, output_hashes, &self.not_changed)?)
     }
-    fn check_outputs(&mut self, task: &InstantiatedTask, context: &mut Self::TaskContext, executed: bool) {
+    fn check_outputs(
+        &mut self,
+        task: &InstantiatedTask,
+        context: &mut Self::TaskContext,
+        executed: bool,
+    ) -> Result<(), Self::OutputCheckError> {
         let output_hashes = context;
 
         let newest_source_timestamp = newest_input_timestamp(task, &self.not_changed)
-            .expect("Failed to check input timestamps");
+            .map_err(OutputCheckError::InputTimestampError)?;
 
         for path in task.resolve_outputs() {
             let path: &Path = path.as_ref();
             if !path.exists() {
-                panic!(
-                    "Output file {} does not exist after running task '{}'",
-                    path.display(),
-                    task.name
-                );
+                return Err(OutputCheckError::OutputFileNotFound(path.to_path_buf()));
             }
 
-            let metadata = std::fs::metadata(path).expect("Failed to get metadata for output file");
+            let metadata = std::fs::metadata(path)
+                .map_err(|e| OutputCheckError::OutputTimestampError(path.to_path_buf(), e))?;
             let output_timestamp = metadata
                 .modified()
                 .expect("Failed to get modified time for output file");
@@ -80,11 +82,11 @@ impl TaskTriggerChecker for NaiveTriggerChecker {
                             // Anyway, if it did change in some other task, we certainly
                             // cannot un-change it so we do nothing.
                         } else {
-                            self.not_changed.insert(path.into(), !executed || &hash_file(path) == prev_hash);
+                            self.not_changed.insert(path.into(), !executed || &hash_file(path)? == prev_hash);
                         }
                     } else {
                         // TODO avoid repetition
-                        self.not_changed.insert(path.into(), !executed || &hash_file(path) == prev_hash);
+                        self.not_changed.insert(path.into(), !executed || &hash_file(path)? == prev_hash);
                     }
                 } else {
                     // Again, we should issue a waring if already present.
@@ -110,7 +112,27 @@ impl TaskTriggerChecker for NaiveTriggerChecker {
                 continue;
             }
         }
+
+        Ok(())
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum RunError {
+    #[error("Failed to check for source changes: {0}")]
+    SourceChangeCheckError(#[from] SourceChangeCheckError),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum OutputCheckError {
+    #[error("Failed to check input timestamp: {0}")]
+    InputTimestampError(anyhow::Error),
+    #[error("Failed to check output timestamp for {0}: {1}")]
+    OutputTimestampError(PathBuf, std::io::Error),
+    #[error("Output file {0} does not exist after running task")]
+    OutputFileNotFound(PathBuf),
+    #[error("Failed to hash file: {0}")]
+    SourceChangeCheckError(#[from] FileHashingError),
 }
 
 type Hash = [u8; 32];
@@ -119,9 +141,9 @@ fn sources_changed(
     task: &InstantiatedTask,
     output_hashes: &mut HashMap<PathBuf, Hash>,
     not_changed: &HashMap<PathBuf, bool>,
-) -> bool {
-    let newest_source_timestamp =
-        newest_input_timestamp(task, not_changed).expect("Failed to check input timestamps");
+) -> Result<bool, SourceChangeCheckError> {
+    let newest_source_timestamp = newest_input_timestamp(task, not_changed)
+        .map_err(SourceChangeCheckError::InputTimestampError)?;
 
     // check all output files against the source file timestamp
     let mut changed = false;
@@ -132,7 +154,8 @@ fn sources_changed(
             changed = true;
             continue;
         }
-        let metadata = std::fs::metadata(path).expect("Failed to get metadata for output file");
+        let metadata = std::fs::metadata(path)
+            .map_err(|e| SourceChangeCheckError::OutputTimestampError(path.to_path_buf(), e))?;
         if let Some(newest_source_timestamp) = newest_source_timestamp {
             let output_timestamp = metadata
                 .modified()
@@ -145,11 +168,24 @@ fn sources_changed(
         };
 
         if metadata.is_file() {
-            output_hashes.insert(path.to_path_buf(), hash_file(path));
+            output_hashes.insert(
+                path.to_path_buf(),
+                hash_file(path).map_err(|e| SourceChangeCheckError::InputFileHashingError(path.to_path_buf(), e))?,
+            );
         }
     }
 
-    changed || task.body.phony
+    Ok(changed || task.body.phony)
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum SourceChangeCheckError {
+    #[error("Failed to check input timestamp: {0}")]
+    InputTimestampError(anyhow::Error),
+    #[error("Failed to check output timestamp for {0}: {1}")]
+    OutputTimestampError(PathBuf, std::io::Error),
+    #[error("Failed to check hash: {0}")]
+    InputFileHashingError(PathBuf, FileHashingError),
 }
 
 // FIXME: this is called twice: first to check for inputs changes and then
@@ -187,12 +223,12 @@ fn newest_input_timestamp(
     Ok(newest_source_timestamp)
 }
 
-fn hash_file(path: impl AsRef<Path>) -> Hash {
-    let mut file = BufReader::new(File::open(path).unwrap());
+fn hash_file(path: impl AsRef<Path>) -> Result<Hash, FileHashingError> {
+    let mut file = BufReader::new(File::open(path).map_err(FileHashingError::ReadError)?);
     let mut buf = [0u8; 512];
     let mut hasher = Sha256::new();
     loop {
-        let n = file.read(&mut buf).unwrap();
+        let n = file.read(&mut buf).map_err(FileHashingError::ReadFailed)?;
         if n <= 0 {
             break;
         }
@@ -200,5 +236,15 @@ fn hash_file(path: impl AsRef<Path>) -> Hash {
     }
     let hash = hasher.finalize();
     let hash = hash.as_slice();
-    hash.try_into().unwrap()
+    Ok(hash.try_into()?)
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum FileHashingError {
+    #[error("Failed to open file: {0}")]
+    ReadError(std::io::Error),
+    #[error("Failed to read: {0}")]
+    ReadFailed(std::io::Error),
+    #[error("Failed to convert hash: {0}")]
+    TryFromSliceError(#[from] std::array::TryFromSliceError),
 }

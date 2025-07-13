@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 use linked_hash_set::LinkedHashSet;
 
-use crate::task::{InstantiatedTask, InstantiationError, ResolvedTaskInvocation, TaskInvocation, TaskRef, Taskfile, Workspace};
+use crate::task::{InstantiatedTask, InstantiationError, ResolvedTaskInvocation, TaskInvocation, TaskRef, Taskfile, TaskfileId, Workspace};
 
 pub mod naive;
 pub mod topological_sort;
@@ -18,7 +18,15 @@ pub fn build_dependency_graph(
     let mut queue: VecDeque<ResolvedTaskInvocation> = VecDeque::new();
 
     // Initialize the queue with the requested task invocation
-    queue.push_back(workspace.resolve_invocation(current, invocation).unwrap().0);
+    queue.push_back(
+        workspace
+            .resolve_invocation(current, invocation)
+            .ok_or_else(|| DependencyGraphConstructionError::TaskfileInvocationResolutionError(
+                current.id.clone(),
+                invocation.clone(),
+            ))?
+            .0
+    );
 
     let mut visited = HashSet::new();
 
@@ -38,8 +46,12 @@ pub fn build_dependency_graph(
         let (tasks, task) = get_instantiation(workspace, &mut instantiations, &invocation)?;
 
         for dep in &task.body.deps.0 {
-            let r = workspace.resolve_invocation(tasks, &dep.invocation);
-            let dep = r.unwrap().0;
+            let (dep, _task) = workspace
+                .resolve_invocation(tasks, &dep.invocation)
+                .ok_or_else(|| DependencyGraphConstructionError::TaskfileInvocationResolutionError(
+                    tasks.id.clone(),
+                    dep.invocation.clone(),
+                ))?;
             node.insert(dep.clone());
             if !visited.contains(&dep) {
                 queue.push_back(dep.clone());
@@ -50,10 +62,12 @@ pub fn build_dependency_graph(
     Ok((graph, instantiations))
 }
 
-#[derive(Debug, Clone, thiserror::Error)]
+#[derive(Debug, thiserror::Error)]
 pub enum DependencyGraphConstructionError {
     #[error("Failed to instantiate task: {0}")]
     InstantiationError(#[from] InstantiationError),
+    #[error("Failed to resolve invocation {1:?} for taskfile {0}")]
+    TaskfileInvocationResolutionError(TaskfileId, TaskInvocation<TaskRef>),
 }
 
 fn get_instantiation<'a>(

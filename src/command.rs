@@ -7,11 +7,16 @@ pub enum Command {
 }
 
 impl Command {
-    pub fn instantiate(&self, handlebars: &mut Handlebars, args: impl Serialize) -> Self {
+    pub fn instantiate(&self, handlebars: &mut Handlebars, args: impl Serialize) -> Result<Self, CommandInstantiationError> {
         let Self::Shell(cmd) = self;
         let rendered = handlebars
-            .render_template(cmd, &args)
-            .expect("Failed to render command template");
-        Command::Shell(rendered)
+            .render_template(cmd, &args)?;
+        Ok(Command::Shell(rendered))
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum CommandInstantiationError {
+    #[error("Failed to render command template: {0}")]
+    TemplateRenderError(#[from] handlebars::RenderError),
 }

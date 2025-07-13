@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use anyhow::anyhow;
 use colored::Colorize;
 use indicatif::{ProgressBar, ProgressStyle};
 
@@ -15,11 +16,11 @@ pub mod dependency_resolution;
 pub mod execution;
 
 pub trait RunManager {
-    fn begin<'a>(self, invocations: impl IntoIterator<Item = &'a ResolvedTaskInvocation>) -> impl RunExecution;
+    fn begin<'a>(self, invocations: impl IntoIterator<Item = &'a ResolvedTaskInvocation>) -> anyhow::Result<impl RunExecution>;
 }
 
 pub trait RunExecution {
-    fn enter_task<'a>(&'a self, invocation: &'a ResolvedTaskInvocation) -> impl TaskExecutionContext + 'a;
+    fn enter_task<'a>(&'a self, invocation: &'a ResolvedTaskInvocation) -> anyhow::Result<impl TaskExecutionContext + 'a>;
 }
 
 pub trait TaskExecutionContext {
@@ -31,14 +32,13 @@ pub trait TaskExecutionContext {
 pub struct DefaultRunManager;
 
 impl RunManager for DefaultRunManager {
-    fn begin<'a>(self, invocations: impl IntoIterator<Item = &'a ResolvedTaskInvocation>) -> impl RunExecution {
+    fn begin<'a>(self, invocations: impl IntoIterator<Item = &'a ResolvedTaskInvocation>) -> anyhow::Result<impl RunExecution> {
         let bar = ProgressBar::new(invocations.into_iter().count() as u64);
-        bar.set_style(ProgressStyle::with_template("[{elapsed_precise}] [{bar:40.green/white}] {pos:>7}/{len:7} {msg}")
-            .unwrap()
+        bar.set_style(ProgressStyle::with_template("[{elapsed_precise}] [{bar:40.green/white}] {pos:>7}/{len:7} {msg}")?
             .progress_chars("=>-"));
-        DefaultRunExecution {
+        Ok(DefaultRunExecution {
             bar,
-        }
+        })
     }
 }
 
@@ -53,14 +53,14 @@ impl Drop for DefaultRunExecution {
 }
 
 impl RunExecution for DefaultRunExecution {
-    fn enter_task<'a>(&'a self, invocation: &'a ResolvedTaskInvocation) -> impl TaskExecutionContext + 'a {
+    fn enter_task<'a>(&'a self, invocation: &'a ResolvedTaskInvocation) -> anyhow::Result<impl TaskExecutionContext + 'a> {
         self.bar.inc(1);
         self.bar.set_message(format!("task: {}", invocation.r#ref.name));
-        DefaultTaskExecutionContext {
+        Ok(DefaultTaskExecutionContext {
             bar: &self.bar,
             invocation,
-            cwd: std::env::current_dir().expect("Failed to get current directory"),
-        }
+            cwd: std::env::current_dir().map_err(|e| anyhow!("Failed to get current directory: {e}"))?,
+        })
     }
 }
 
@@ -107,6 +107,10 @@ pub enum RunError {
     TaskNotFound(TaskRef),
     #[error("Failed to instantiate task: {0}")]
     InstantiationError(#[from] crate::task::InstantiationError),
+    #[error("Manager failed to begin task: {0}")]
+    BeginTaskError(anyhow::Error),
+    #[error("Manager run execution failed enter task: {0}")]
+    EnterTaskError(anyhow::Error),
 }
 
 pub fn run(
@@ -120,13 +124,13 @@ pub fn run(
     let sorted = topological_sort(&deps_graph)?;
 
     let mut trigger_checker = NaiveTriggerChecker::default();
-    let execution = run_manager.begin(sorted.iter().rev());
+    let execution = run_manager.begin(sorted.iter().rev()).map_err(RunError::BeginTaskError)?;
     for invocation in sorted.iter().rev() {
         maybe_run_single_task(
             &instantiations,
             invocation,
             &mut trigger_checker,
-            execution.enter_task(invocation),
+            execution.enter_task(invocation).map_err(RunError::EnterTaskError)?,
         )?;
     }
     Ok(())

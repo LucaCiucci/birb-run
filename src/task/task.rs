@@ -90,10 +90,10 @@ pub enum OutputPath {
 }
 
 impl OutputPath {
-    pub fn instantiate(&self, handlebars: &mut Handlebars, args: &impl Serialize) -> Self {
+    pub fn instantiate(&self, handlebars: &mut Handlebars, args: &impl Serialize) -> Result<Self, OutputPathInstantiationError> {
         match self {
-            OutputPath::File(path) => OutputPath::File(handlebars.render_template(path, args).unwrap()),
-            OutputPath::Directory(path) => OutputPath::Directory(handlebars.render_template(path, args).unwrap()),
+            OutputPath::File(path) => Ok(OutputPath::File(handlebars.render_template(path, args)?)),
+            OutputPath::Directory(path) => Ok(OutputPath::Directory(handlebars.render_template(path, args)?)),
         }
     }
 
@@ -118,4 +118,10 @@ impl AsRef<Path> for OutputPath {
             OutputPath::File(path) | OutputPath::Directory(path) => path.as_ref(),
         }
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum OutputPathInstantiationError {
+    #[error("Failed to render template: {0}")]
+    TemplateRenderError(#[from] handlebars::RenderError),
 }

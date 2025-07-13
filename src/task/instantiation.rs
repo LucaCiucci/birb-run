@@ -4,8 +4,7 @@ use handlebars::Handlebars;
 use serde_json::Value as Json;
 
 use crate::{
-    task::{Dep, Deps, InstantiatedTask, Outputs, Task, TaskBody},
-    utils::type_checking::{TypeCheckError, check_type},
+    command::CommandInstantiationError, task::{Dep, Deps, InstantiatedTask, OutputPathInstantiationError, Outputs, Task, TaskBody}, utils::type_checking::{check_type, TypeCheckError}
 };
 
 impl Task {
@@ -21,8 +20,7 @@ impl Task {
             name: self.name.clone(),
             body: TaskBody {
                 workdir: handlebars
-                    .render_template(&self.body.workdir.to_string_lossy(), &args)
-                    .unwrap()
+                    .render_template(&self.body.workdir.to_string_lossy(), &args)?
                     .into(),
                 phony: self.body.phony,
                 outputs: Outputs {
@@ -32,14 +30,14 @@ impl Task {
                         .paths
                         .iter()
                         .map(|file| file.instantiate(&mut handlebars, args))
-                        .collect(),
+                        .collect::<Result<_, _>>()?,
                 },
                 sources: self
                     .body
                     .sources
                     .iter()
-                    .map(|source| handlebars.render_template(source, &args).unwrap())
-                    .collect(),
+                    .map(|source| handlebars.render_template(source, &args))
+                    .collect::<Result<_, _>>()?,
                 deps: Deps(
                     self.body
                         .deps
@@ -55,7 +53,8 @@ impl Task {
                     .steps
                     .iter()
                     .map(|step| step.instantiate(&mut handlebars, &args))
-                    .collect(),
+                    .collect::<Result<_, _>>()
+                    .map_err(InstantiationError::StepsInstantiationError)?,
                 clean: self
                     .body
                     .clean
@@ -64,8 +63,9 @@ impl Task {
                         clean_steps
                             .iter()
                             .map(|step| step.instantiate(&mut handlebars, &args))
-                            .collect()
-                    }),
+                            .collect::<Result<_, _>>()
+                            .map_err(InstantiationError::CleanStepsInstantiationError)
+                    }).transpose()?,
             },
         })
     }
@@ -91,10 +91,18 @@ impl Task {
     }
 }
 
-#[derive(Debug, Clone, thiserror::Error)]
+#[derive(Debug, thiserror::Error)]
 pub enum InstantiationError {
     #[error("Invalid arguments: {0}")]
     ArgsError(#[from] ArgumentsCheckError),
+    #[error("Failed to render template: {0}")]
+    TemplateRenderError(#[from] handlebars::RenderError),
+    #[error("Failed to instantiate output path: {0}")]
+    OutputPathInstantiationError(#[from] OutputPathInstantiationError),
+    #[error("Failed to instantiate steps: {0}")]
+    StepsInstantiationError(CommandInstantiationError),
+    #[error("Failed to instantiate clean steps: {0}")]
+    CleanStepsInstantiationError(CommandInstantiationError),
 }
 
 #[derive(Debug, Clone, thiserror::Error)]

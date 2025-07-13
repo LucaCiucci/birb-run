@@ -11,7 +11,7 @@ This is a draft of a task runner, similar to [`make`](https://www.gnu.org/softwa
 
 ## Overview
 
-`birb-run` lets you write _taskfiles_, which are usually YAML files that defines tasks and their dependencies, for example:
+`birb-run` lets you write _taskfiles_, which are usually YAML files defining tasks and their dependencies, for example:
 ```yaml
 # tasks.yaml
 tasks:
