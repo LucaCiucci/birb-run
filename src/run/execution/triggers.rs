@@ -34,8 +34,9 @@ impl TaskTriggerChecker for NaiveTriggerChecker {
         let has_no_outputs = task.resolve_outputs().next().is_none();
         let has_no_command = task.body.steps.is_empty();
 
-        // If a command does not have any output, we assume it should always run.
-        if has_no_outputs {
+        // If a command does something and it does not have any output,
+        // we assume it should always run.
+        if has_no_outputs && !has_no_command {
             return Ok(true);
         }
 
