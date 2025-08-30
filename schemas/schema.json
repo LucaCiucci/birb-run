@@ -1,0 +1,151 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Birb Taskfile",
+  "type": "object",
+  "$defs": {
+    "ArgType": {
+      "oneOf": [
+        {
+          "enum": [
+            "str", "string",   // ArgType::String
+            "number",          // ArgType::Number
+            "bool", "boolean", // ArgType::Boolean
+            "path",            // ArgType::Path
+            "array"            // ArgType::Array
+          ]
+        },
+        {                      // ArgType::Select
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      ]
+    }
+  },
+  "properties": {
+    "imports": {
+      "type": "object",
+      "description": "A map of import paths to their local file paths",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "tasks": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "workdir": {
+            "type": "string",
+            "description": "Working directory for the task"
+          },
+          "sources": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "List of source files for the task"
+          },
+          "outputs": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "List of output files or directories for the task"
+          },
+          "params": {
+            "type": "object",
+            "description": "Parameters for the task",
+            "additionalProperties": {
+              "oneOf": [
+                { "$ref": "#/$defs/ArgType" },
+                {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "oneOf": [
+                        { "$ref": "#/$defs/ArgType" }
+                      ]
+                    },
+                    "default": { "type": "string" }
+                  },
+                  "required": ["type"],
+                  "additionalProperties": false
+                }
+              ]
+            }
+          },
+          "deps": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                { "type": "string" },
+                {
+                  "type": "object",
+                  "properties": {
+                    "task": { "type": "string" },
+                    "with": {
+                      "type": "object",
+                      "description": "Arguments to pass to the dependency task",
+                      "additionalProperties": true
+                    }
+                  },
+                  "required": ["task"]
+                }
+              ]
+            }
+          },
+          "steps": {
+            "oneOf": [
+              { "type": "string" },
+              {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    { "type": "string" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "run": { "type": "string" }
+                      },
+                      "required": ["run"],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          "clean": {
+            "oneOf": [
+              { "type": "string" },
+              {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    { "type": "string" },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "run": { "type": "string" }
+                      },
+                      "required": ["run"],
+                      "additionalProperties": false
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          "phony": {
+            "type": "boolean",
+            "description": "Whether the task is phony (does not produce outputs)"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "tasks"
+  ],
+  "additionalProperties": false
+}
