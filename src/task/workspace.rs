@@ -25,8 +25,9 @@ impl Workspace {
     // TOOD lazy load of imports?
     pub fn load_taskfile(&mut self, path: impl Into<PathBuf>) -> Result<TaskfileId, WorkspaceLoadError> {
         let path = path.into();
-        let taskfile_path = Taskfile::find_taskfile(&path)
-            .ok_or(WorkspaceLoadError::TaskfileNotFound)?
+        let source = Taskfile::find_taskfile(&path).ok_or(WorkspaceLoadError::TaskfileNotFound)?;
+        let taskfile_path = source
+            .path()
             .canonicalize()
             .map_err(|_| WorkspaceLoadError::Canonicalize(path.clone()))?;
 
@@ -34,8 +35,8 @@ impl Workspace {
             return Ok(id);
         }
 
-        let tasks = Taskfile::from_yaml_file(&taskfile_path)
-            .map_err(|e| WorkspaceLoadError::Yaml(taskfile_path.clone(), e))?;
+        let tasks = source.load()?;
+
         let mut imports = tasks.imports.clone();
         let id = TaskfileId::from_path(taskfile_path.clone());
 

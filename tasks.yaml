@@ -2,6 +2,8 @@
 
 imports:
   tools: tasks_2.yaml
+  tasks_3: tasks_3.json
+  tasks_4: tasks_4.json.nu
 
 tasks:
   car:
@@ -10,6 +12,8 @@ tasks:
 
       This is a *very* long **description** for the `car` ***task***.
     deps:
+      - tasks_3:hello
+      - tasks_4:hello
       - task: engine
         with: # or args
           configuration: v8

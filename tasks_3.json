@@ -1,0 +1,9 @@
+{
+    "tasks": {
+        "hello": {
+            "steps": [
+                "echo hello from tasks_3.json"
+            ]
+        }
+    }
+}
