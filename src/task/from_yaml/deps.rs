@@ -23,6 +23,8 @@ pub fn parse_deps(task: &mut Task, deps: &Yaml) -> Result<(), DepParsingError> {
                             r#ref: TaskRef::parse(name),
                             args: Default::default(),
                         },
+                        id: Some(name.clone()), // automatic id in this case
+                        after: Vec::new(),
                     },
                     Yaml::Hash(value) => {
                         let Some(name) = value.get(&Yaml::String("task".into())) else {
@@ -33,6 +35,8 @@ pub fn parse_deps(task: &mut Task, deps: &Yaml) -> Result<(), DepParsingError> {
                                 r#ref: TaskRef::parse(name.as_str().expect("Expected dependency key to be a string")),
                                 args: Default::default(),
                             },
+                            id: None,
+                            after: Vec::new(),
                         };
 
                         if let Some(args) = value.get(&Yaml::String("with".into())) {
@@ -47,6 +51,32 @@ pub fn parse_deps(task: &mut Task, deps: &Yaml) -> Result<(), DepParsingError> {
                                 let value = yaml_to_json(arg_value)
                                     .map_err(|e| DepParsingError::ArgumentConversionError(arg_key.clone(), e))?;
                                 dep.invocation.args.insert(arg_key, value);
+                            }
+                        }
+
+                        if let Some(id) = value.get(&Yaml::String("id".into())) {
+                            let id = id
+                                .as_str()
+                                .expect("Expected dependency id to be a string") // TODO better error handling
+                                .to_string();
+                            dep.id = Some(id);
+                        }
+
+                        if let Some(after) = value.get(&Yaml::String("after".into())) {
+                            // TODO use match here
+                            if let Yaml::String(after_str) = after {
+                                dep.after.push(after_str.clone());
+                            } else {
+                                let Yaml::Array(after) = after else {
+                                    // TODO better error handling
+                                    panic!("Expected 'after' to be an array");
+                                };
+                                for after in after {
+                                    let Some(after) = after.as_str() else {
+                                        return Err(DepParsingError::InvalidArgumentKey(after.clone()));
+                                    };
+                                    dep.after.push(after.to_string());
+                                }
                             }
                         }
 

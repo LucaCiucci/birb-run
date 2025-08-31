@@ -4,7 +4,7 @@ use handlebars::Handlebars;
 use serde_json::Value as Json;
 
 use crate::{
-    command::CommandInstantiationError, task::{Dep, Deps, InstantiatedTask, OutputPathInstantiationError, Outputs, Task, TaskBody}, utils::type_checking::{check_type, TypeCheckError}
+    command::CommandInstantiationError, task::{Deps, InstantiatedTask, OutputPathInstantiationError, Outputs, Task, TaskBody}, utils::type_checking::{check_type, TypeCheckError}
 };
 
 impl Task {
@@ -43,9 +43,7 @@ impl Task {
                         .deps
                         .0
                         .iter()
-                        .map(|dep| Dep {
-                            invocation: dep.invocation.instantiate(&mut handlebars, &args),
-                        })
+                        .map(|dep| dep.instantiate(&mut handlebars, &args))
                         .collect::<Vec<_>>(),
                 ),
                 steps: self

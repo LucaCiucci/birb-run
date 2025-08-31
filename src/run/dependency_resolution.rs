@@ -45,19 +45,68 @@ pub fn build_dependency_graph(
 
         let (tasks, task) = get_instantiation(workspace, &mut instantiations, &invocation)?;
 
+        let mut named_deps: HashMap<String, ResolvedTaskInvocation> = HashMap::new();
+
         for dep in &task.body.deps.0 {
-            let (dep, _task) = workspace
+            let (dep_invocation, _task) = workspace
                 .resolve_invocation(tasks, &dep.invocation)
                 .ok_or_else(|| DependencyGraphConstructionError::TaskfileInvocationResolutionError(
                     tasks.id.clone(),
                     dep.invocation.clone(),
                 ))?;
-            node.insert(dep.clone());
-            if !visited.contains(&dep) {
-                queue.push_back(dep.clone());
+            if let Some(id) = &dep.id {
+                let old = named_deps.insert(id.clone(), dep_invocation.clone());
+                if old.is_some() {
+                    // TODO better error handling
+                    panic!("Duplicate dependency id: {}", id);
+                }
+            }
+            node.insert(dep_invocation.clone());
+            if !visited.contains(&dep_invocation) {
+                queue.push_back(dep_invocation.clone());
+            }
+        }
+
+        // additional constraints
+        // TODO maybe inefficient
+        for dep in &task.body.deps.0 {
+            // TODO inefficient, we already resolved this above
+            let (dep_invocation, _task) = workspace
+                .resolve_invocation(tasks, &dep.invocation)
+                .ok_or_else(|| DependencyGraphConstructionError::TaskfileInvocationResolutionError(
+                    tasks.id.clone(),
+                    dep.invocation.clone(),
+                ))?;
+
+            for after in &dep.after {
+                let Some(referenced) = named_deps.get(after) else {
+                    // TODO better error handling
+                    panic!("named Dependency (after) {after:?} not found");
+                };
+
+                let node = graph
+                    .entry(dep_invocation.clone())
+                    .or_insert_with(LinkedHashSet::new);
+
+                node.insert(referenced.clone());
             }
         }
     }
+
+    // ! dump dependency graph
+    // TODO cycle detection at this level might be simpler and more informative,
+    // or maybe only for an LSP
+    for (key, value) in &graph {
+        println!("{}", key.r#ref.display_absolute());
+        for v in value {
+            println!("  -> {}", v.r#ref.display_absolute());
+        }
+    }
+
+    // TODO we should ad an optional (because it might be expensive) missing constraint check here (after full graph creation though).
+    // For example, if in the graph there are A and B which are not constrained, but one uses the
+    // output of the other, we should issue a warning. Or possibly warning+auto-constraint addition,
+    // but this might be surprising and expensive. Note: special care with sub-dirs!
 
     Ok((graph, instantiations))
 }

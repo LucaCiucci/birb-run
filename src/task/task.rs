@@ -76,6 +76,18 @@ pub struct Deps(pub Vec<Dep>);
 #[derive(Debug, Clone)]
 pub struct Dep {
     pub invocation: TaskInvocation<TaskRef>,
+    pub id: Option<String>,
+    pub after: Vec<String>,
+}
+
+impl Dep {
+    pub fn instantiate(&self, handlebars: &mut Handlebars, args: &impl Serialize) -> Dep {
+        Dep {
+            invocation: self.invocation.instantiate(handlebars, args),
+            id: self.id.clone(),
+            after: self.after.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
