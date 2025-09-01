@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
+use linked_hash_map::LinkedHashMap;
 use linked_hash_set::LinkedHashSet;
 
 use crate::task::{InstantiatedTask, InstantiationError, ResolvedTaskInvocation, TaskInvocation, TaskRef, Taskfile, TaskfileId, Workspace};
@@ -12,7 +13,7 @@ pub fn build_dependency_graph(
     current: &Taskfile,
     invocation: &TaskInvocation<TaskRef>,
 ) -> Result<(
-    HashMap<ResolvedTaskInvocation, LinkedHashSet<ResolvedTaskInvocation>>,
+    LinkedHashMap<ResolvedTaskInvocation, LinkedHashSet<ResolvedTaskInvocation>>,
     HashMap<ResolvedTaskInvocation, InstantiatedTask>,
 ), DependencyGraphConstructionError> {
     let mut queue: VecDeque<ResolvedTaskInvocation> = VecDeque::new();
@@ -30,7 +31,7 @@ pub fn build_dependency_graph(
 
     let mut visited = HashSet::new();
 
-    let mut graph: HashMap<ResolvedTaskInvocation, LinkedHashSet<ResolvedTaskInvocation>> = HashMap::new();
+    let mut graph: LinkedHashMap<ResolvedTaskInvocation, LinkedHashSet<ResolvedTaskInvocation>> = LinkedHashMap::new();
     let mut instantiations = HashMap::new();
 
     while let Some(invocation) = queue.pop_front() {
@@ -96,12 +97,12 @@ pub fn build_dependency_graph(
     // ! dump dependency graph
     // TODO cycle detection at this level might be simpler and more informative,
     // or maybe only for an LSP
-    for (key, value) in &graph {
-        println!("{}", key.r#ref.display_absolute());
-        for v in value {
-            println!("  -> {}", v.r#ref.display_absolute());
-        }
-    }
+    // for (key, value) in &graph {
+    //     println!("{}", key.r#ref.display_absolute());
+    //     for v in value {
+    //         println!("  -> {}", v.r#ref.display_absolute());
+    //     }
+    // }
 
     // TODO we should ad an optional (because it might be expensive) missing constraint check here (after full graph creation though).
     // For example, if in the graph there are A and B which are not constrained, but one uses the

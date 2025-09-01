@@ -1,13 +1,13 @@
 use std::collections::{HashMap, HashSet};
 
+use linked_hash_map::LinkedHashMap;
 use linked_hash_set::LinkedHashSet;
 
 use crate::{run::dependency_resolution::TopologicalSortError, task::ResolvedTaskInvocation};
 
 /// Performs topological sort on the dependency graph to determine execution order
-/// Returns an error if a cycle is detected
 pub fn topological_sort(
-    graph: &HashMap<ResolvedTaskInvocation, LinkedHashSet<ResolvedTaskInvocation>>,
+    graph: &LinkedHashMap<ResolvedTaskInvocation, LinkedHashSet<ResolvedTaskInvocation>>,
 ) -> Result<Vec<ResolvedTaskInvocation>, TopologicalSortError> {
     let mut result = Vec::new();
     let mut visited = HashSet::new();
@@ -28,7 +28,7 @@ pub fn topological_sort(
 /// Recursive helper function for topological sort using DFS
 fn visit_node(
     node: &ResolvedTaskInvocation,
-    graph: &HashMap<ResolvedTaskInvocation, LinkedHashSet<ResolvedTaskInvocation>>,
+    graph: &LinkedHashMap<ResolvedTaskInvocation, LinkedHashSet<ResolvedTaskInvocation>>,
     visited: &mut HashSet<ResolvedTaskInvocation>,
     visiting: &mut HashSet<ResolvedTaskInvocation>,
     result: &mut Vec<ResolvedTaskInvocation>,
@@ -61,7 +61,7 @@ fn visit_node(
 /// Reconstructs a cycle path for error reporting
 fn reconstruct_cycle(
     start: &ResolvedTaskInvocation,
-    graph: &HashMap<ResolvedTaskInvocation, LinkedHashSet<ResolvedTaskInvocation>>,
+    graph: &LinkedHashMap<ResolvedTaskInvocation, LinkedHashSet<ResolvedTaskInvocation>>,
     visiting: &HashSet<ResolvedTaskInvocation>,
 ) -> Vec<ResolvedTaskInvocation> {
     let mut cycle = vec![start.clone()];
