@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use handlebars::Handlebars;
+use handlebars::{Handlebars, HelperDef, RenderErrorReason};
 use serde_json::Value as Json;
 
 use crate::{
@@ -14,7 +14,7 @@ impl Task {
     ) -> Result<InstantiatedTask, InstantiationError> {
         self.check_args(&args)?;
 
-        let mut handlebars = Handlebars::new();
+        let mut handlebars = init_handlebars();
 
         Ok(InstantiatedTask {
             name: self.name.clone(),
@@ -109,4 +109,44 @@ pub enum ArgumentsCheckError {
     NotFound { key: String },
     #[error("Argument '{key}' has invalid type: {err}")]
     TypeError { key: String, err: TypeCheckError },
+}
+
+
+fn init_handlebars() -> Handlebars<'static> {
+    let mut handlebars = Handlebars::new();
+    //handlebars.register_escape_fn(handlebars::no_escape);
+    handlebars.register_helper("fmt_precision", Box::new(FmtPrecision));
+    handlebars
+}
+
+struct FmtPrecision;
+
+impl HelperDef for FmtPrecision {
+    fn call<'reg: 'rc, 'rc>(
+        &self,
+        h: &handlebars::Helper<'rc>,
+        _r: &'reg Handlebars<'reg>,
+        _ctx: &'rc handlebars::Context,
+        _rc: &mut handlebars::RenderContext<'reg, 'rc>,
+        out: &mut dyn handlebars::Output,
+    ) -> handlebars::HelperResult {
+        let param = h.param(0).ok_or_else(|| {
+            RenderErrorReason::ParamNotFoundForIndex("number", 0)
+        })?;
+        let num = param.value().as_f64().ok_or_else(|| {
+            RenderErrorReason::InvalidParamType("number")
+        })?;
+        
+        let param = h.param(1).ok_or_else(|| {
+            RenderErrorReason::ParamNotFoundForIndex("precision", 1)
+        })?;
+
+        let precision = param.value().as_u64().ok_or_else(|| {
+            RenderErrorReason::InvalidParamType("precision")
+        })? as usize;
+
+        let formatted = format!("{:.*}", precision, num);
+        out.write(&formatted)?;
+        Ok(())
+    }
 }
