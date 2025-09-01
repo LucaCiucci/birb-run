@@ -69,6 +69,7 @@ pub fn parse_task(workdir: impl Into<PathBuf>, name: &str, value: &Yaml) -> Resu
         task.body.phony = value
             .as_bool()
             .ok_or(InvalidTaskObject::InvalidPhonyType)?;
+        used_keys.insert("phony");
     }
 
     if let Some(deps) = value.get(&Yaml::String("deps".into())) {
