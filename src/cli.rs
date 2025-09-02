@@ -63,6 +63,17 @@ pub enum OutputFormat {
 pub struct Run {
     #[clap(default_value = "default")]
     task: String,
+
+    #[clap(flatten)]
+    options: CliRunOptions,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Parser)]
+pub struct CliRunOptions {
+    /// Less verbose, only show progress and not the tasks name and status
+    #[clap(long)]
+    pub compact: bool,
 }
 
 /// Recursively clean a task
@@ -92,7 +103,7 @@ pub fn main(args: &Cli) -> anyhow::Result<()> {
 
     match &args.command {
         Command::List(args) => list(&tasks, args)?,
-        Command::Run(args) => tasks.invoke(&workspace, &TaskInvocation::no_args(TaskRef::parse(&args.task)))?,
+        Command::Run(args) => tasks.invoke(&workspace, &TaskInvocation::no_args(TaskRef::parse(&args.task)), &args.options)?,
         Command::Clean(args) => tasks.clean(&workspace, &TaskInvocation::no_args(TaskRef::parse(&args.task)), true)?,
         Command::CleanOnly(args) => tasks.clean(&workspace, &TaskInvocation::no_args(TaskRef::parse(&args.task)), false)?,
     };

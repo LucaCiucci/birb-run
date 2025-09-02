@@ -5,7 +5,7 @@ use linked_hash_map::LinkedHashMap;
 use pathdiff::diff_paths;
 use yaml_rust::{Yaml, YamlLoader};
 
-use crate::{run::{DefaultRunManager, RunError}, task::{from_yaml::InvalidTaskObject, Task, TaskInvocation, TaskRef, Workspace, WorkspaceLoadError}};
+use crate::{cli::CliRunOptions, run::{DefaultRunManager, RunError}, task::{from_yaml::InvalidTaskObject, Task, TaskInvocation, TaskRef, Workspace, WorkspaceLoadError}};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum TaskfileId {
@@ -310,8 +310,8 @@ impl Taskfile {
         Ok(this)
     }
 
-    pub fn invoke(&self, workspace: &Workspace, req: &TaskInvocation<TaskRef>) -> Result<(), RunError> {
-        crate::run::run(workspace, &self, req, DefaultRunManager)
+    pub fn invoke(&self, workspace: &Workspace, req: &TaskInvocation<TaskRef>, options: &CliRunOptions) -> Result<(), RunError> {
+        crate::run::run(workspace, &self, req, DefaultRunManager(options))
     }
 
     pub fn clean(&self, workspace: &Workspace, req: &TaskInvocation<TaskRef>, recursive: bool) -> Result<(), RunError> {
