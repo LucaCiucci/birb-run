@@ -11,6 +11,7 @@ use crate::{
 
 pub mod naive;
 pub mod triggers;
+pub mod scheduler;
 
 pub trait CommandExecutor {
     fn execute<C: Borrow<Command>>(
