@@ -112,6 +112,22 @@ impl<C: Borrow<CliRunOptions> + Send + Sync> TaskExecutionContext for ParallelTa
         NaiveExecutor {
             output_handler: |output| {
                 self.t.inc(1);
+
+                let mut first_output_part: &str = output;
+                let mut second_output_part: &str = "";
+
+                // try to find a set title escape sequence, take it and remove it from output
+                // this is a hack, but I don't know how to do it better
+                let set_title_prefix = "\u{1b}]0;";
+                if let Some(start) = output.find(set_title_prefix) {
+                    if let Some(end) = output[start + set_title_prefix.len()..].find('\u{7}') {
+                        let title = &output[start + set_title_prefix.len()..start + set_title_prefix.len() + end];
+                        first_output_part = &output[..start];
+                        second_output_part = &output[start + set_title_prefix.len() + end + 1..];
+                        self.t.set_message(format!("{} TITLE {title}", "task".cyan().bold()));
+                    }
+                }
+
                 // ! self.bar.suspend(|| println!("{output}"));
                 self.bar.suspend(|| {
                     let color = COLOR_RING[self.idx % COLOR_RING.len()];
@@ -122,7 +138,7 @@ impl<C: Borrow<CliRunOptions> + Send + Sync> TaskExecutionContext for ParallelTa
                         format!("#{:<5} | ", self.idx)
                     }.color(color).dimmed();
                     *last = self.idx;
-                    println!("{prefix}{output}");
+                    println!("{prefix}{first_output_part}{second_output_part}");
                 });
             },
         }
