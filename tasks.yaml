@@ -79,7 +79,15 @@ tasks:
       id: number
     steps:
     - |
+      #!/usr/bin/env bash
+      set_title() {
+        echo -ne "setting title"
+        echo "OK"
+        echo -ne "\033]0;$1\007"
+      }
+
       for i in $(seq 0 50); do
+        set_title "p_{{ id }} step $i"
         echo "Step $i from p_{{ id }}"
         sleep 0.1
       done
