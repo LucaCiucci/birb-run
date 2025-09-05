@@ -3,7 +3,10 @@ use std::path::PathBuf;
 use clap::{Parser, ValueEnum};
 use colored::Colorize;
 
-use crate::task::{Task, TaskInvocation, TaskRef, Taskfile, Workspace};
+use crate::{cli::threads_config::ThreadsConfig, task::{Task, TaskInvocation, TaskRef, Taskfile, Workspace}};
+
+pub mod threads_config;
+pub mod value_parser;
 
 /// Command-line interface for the birb task runner.
 ///
@@ -74,6 +77,12 @@ pub struct CliRunOptions {
     /// Less verbose, only show progress and not the tasks name and status
     #[clap(long)]
     pub compact: bool,
+
+    /// Number of threads to use for parallel execution.
+    ///
+    /// Using this option enable parallel execution mode using the specified number of threads.
+    #[clap(short = 'j', long)]
+    pub threads: Option<ThreadsConfig>,
 }
 
 /// Recursively clean a task

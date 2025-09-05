@@ -5,7 +5,8 @@ use linked_hash_set::LinkedHashSet;
 use tokio::task::JoinSet;
 
 // TODO add a number to describe how "heavy" a task is, so that we can better schedule them
-struct TaskTreeQueue<T> {
+#[derive(Debug)]
+struct TaskTreeQueue<T: Hash + Eq> {
     /// Sorted list of tasks with their dependencies
     queue: LinkedHashMap<T, HashSet<T>>,
 
@@ -83,7 +84,7 @@ where
     }
 }
 
-pub async fn run_parallel<Ref, F>(
+pub async fn execute_tasks_concurrently<Ref, F>(
     max_concurrency: usize,
     queue: impl IntoIterator<Item = Ref>,
     deps_graph: LinkedHashMap<Ref, LinkedHashSet<Ref>>,
@@ -232,7 +233,7 @@ mod tests {
 
     #[tokio::test]
     async fn null_run() {
-        run_parallel(
+        execute_tasks_concurrently(
             1,
             vec![],
             Default::default(),
@@ -244,7 +245,7 @@ mod tests {
     async fn trivial_run() {
         let results = Arc::new(Mutex::new(vec![]));
 
-        run_parallel(
+        execute_tasks_concurrently(
             1,
             vec![1, 2, 3],
             Default::default(),
@@ -264,7 +265,7 @@ mod tests {
     async fn less_trivial_run() {
         let results = Arc::new(Mutex::new(vec![]));
 
-        run_parallel(
+        execute_tasks_concurrently(
             1,
             vec![1, 2, 3],
             [(1, [2].into_iter().collect())].into_iter().collect(), // 1 depends on 2
@@ -309,7 +310,7 @@ mod tests {
         });
 
         let results2 = results.clone();
-        let j0 = run_parallel(
+        let j0 = execute_tasks_concurrently(
             1000,
             vec![1, 2, 3],
             [
@@ -391,7 +392,7 @@ mod tests {
         });
 
         let results2 = results.clone();
-        let j0 = run_parallel(
+        let j0 = execute_tasks_concurrently(
             1,
             vec![1, 2, 3],
             [

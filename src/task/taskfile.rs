@@ -5,7 +5,7 @@ use linked_hash_map::LinkedHashMap;
 use pathdiff::diff_paths;
 use yaml_rust::{Yaml, YamlLoader};
 
-use crate::{cli::CliRunOptions, run::{DefaultRunManager, RunError}, task::{from_yaml::InvalidTaskObject, Task, TaskInvocation, TaskRef, Workspace, WorkspaceLoadError}};
+use crate::{cli::CliRunOptions, run::{default_run_manager::DefaultRunManager, parallel_run_manager::ParallelRunManager, RunError}, task::{from_yaml::InvalidTaskObject, Task, TaskInvocation, TaskRef, Workspace, WorkspaceLoadError}};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum TaskfileId {
@@ -311,7 +311,21 @@ impl Taskfile {
     }
 
     pub fn invoke(&self, workspace: &Workspace, req: &TaskInvocation<TaskRef>, options: &CliRunOptions) -> Result<(), RunError> {
-        crate::run::run(workspace, &self, req, DefaultRunManager(options))
+        if let Some(max_concurrency) = options.threads.map(|t| t.get_num_threads()) {
+            // multi-threaded run, even if max_concurrency is 1
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("Failed to build Tokio runtime")
+                .block_on({
+                    assert!(max_concurrency > 0);
+                    let options = options.clone();
+                    crate::run::run_parallel(workspace, self, req, ParallelRunManager(options), max_concurrency)
+                })
+        } else {
+            // single-threaded run
+            crate::run::run(workspace, &self, req, DefaultRunManager(options))
+        }
     }
 
     pub fn clean(&self, workspace: &Workspace, req: &TaskInvocation<TaskRef>, recursive: bool) -> Result<(), RunError> {

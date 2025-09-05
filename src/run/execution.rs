@@ -18,11 +18,11 @@ pub trait CommandExecutor {
         &mut self,
         pwd: impl AsRef<Path>,
         commands: impl IntoIterator<Item = C>,
-    );
+    ) -> anyhow::Result<()>; // TODO error type
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum ExecutionError {
+pub enum TaskExecutionError {
     #[error("Task not found for invocation {0:?}")]
     TaskNotFound(ResolvedTaskInvocation),
     #[error("Failed to remove {0}")]
@@ -31,6 +31,10 @@ pub enum ExecutionError {
     ShouldRunCheckError(anyhow::Error),
     #[error("Output check failed: {0}")]
     OutputCheckError(anyhow::Error),
+    #[error("Command execution failed: {0}")]
+    CommandExecutorError(anyhow::Error), // TODO better error type
+    #[error("Other")]
+    Other(anyhow::Error), // TODO remove this
 }
 
 pub fn maybe_run_single_task<T: TaskTriggerChecker, C: TaskExecutionContext>(
@@ -38,24 +42,24 @@ pub fn maybe_run_single_task<T: TaskTriggerChecker, C: TaskExecutionContext>(
     invocation: &ResolvedTaskInvocation,
     trigger_checker: &mut T,
     mut execution_context: C,
-) -> Result<(), ExecutionError> {
+) -> Result<(), TaskExecutionError> {
     let task = tasks
         .get(&invocation)
-        .ok_or(ExecutionError::TaskNotFound(invocation.clone()))?;
+        .ok_or(TaskExecutionError::TaskNotFound(invocation.clone()))?;
 
     let mut context = trigger_checker.new_task_context();
 
     let should_run = trigger_checker.should_run(task, &mut context)
-        .map_err(|e| ExecutionError::ShouldRunCheckError(e.into()))?;
+        .map_err(|e| TaskExecutionError::ShouldRunCheckError(e.into()))?;
 
     if should_run {
-        execution_context.run().execute(&task.body.workdir, &task.body.steps);
+        execution_context.run().execute(&task.body.workdir, &task.body.steps).map_err(TaskExecutionError::CommandExecutorError)?;
     } else {
         execution_context.up_to_date();
     }
 
     trigger_checker.check_outputs(task, &mut context, should_run)
-        .map_err(|e| ExecutionError::OutputCheckError(e.into()))?;
+        .map_err(|e| TaskExecutionError::OutputCheckError(e.into()))?;
 
     Ok(())
 }
@@ -65,10 +69,10 @@ pub fn clean_single_task(
     instantiated_tasks: &HashMap<ResolvedTaskInvocation, InstantiatedTask>,
     invocation: &ResolvedTaskInvocation,
     output_handler: impl FnMut(&str),
-) -> Result<(), ExecutionError> {
+) -> Result<(), TaskExecutionError> {
     let task = instantiated_tasks
         .get(&invocation)
-        .ok_or(ExecutionError::TaskNotFound(invocation.clone()))?;
+        .ok_or(TaskExecutionError::TaskNotFound(invocation.clone()))?;
 
     let cwd = std::env::current_dir().expect("Failed to get current directory");
 
@@ -83,13 +87,13 @@ pub fn clean_instantiated_task(
     tasks: &Taskfile,
     task: &InstantiatedTask,
     mut output_handler: impl FnMut(&str),
-) -> Result<(), ExecutionError> {
+) -> Result<(), TaskExecutionError> {
     if let Some(clean_steps) = &task.body.clean {
         // HACK temporary solution
         let mut executor = NaiveExecutor {
             output_handler: &mut output_handler,
         };
-        executor.execute(&task.body.workdir, clean_steps);
+        executor.execute(&task.body.workdir, clean_steps).map_err(TaskExecutionError::Other)?;
     }
 
     for o in task.resolve_outputs() {
@@ -107,13 +111,13 @@ pub fn clean_instantiated_task(
 
         match o {
             OutputPath::File(path) => if Path::new(&path).exists() {
-                std::fs::remove_file(path).map_err(ExecutionError::RemoveFileError)?;
+                std::fs::remove_file(path).map_err(TaskExecutionError::RemoveFileError)?;
                 println!("{}\t{}", rel_path.display(), "REMOVED".magenta());
             } else {
                 println!("{}\t{}", rel_path.display(), "NOT FOUND".bright_black());
             },
             OutputPath::Directory(path) => if Path::new(&path).exists() {
-                std::fs::remove_dir_all(path).map_err(ExecutionError::RemoveFileError)?;
+                std::fs::remove_dir_all(path).map_err(TaskExecutionError::RemoveFileError)?;
                 println!("{}\t{}", rel_path.display(), "REMOVED".magenta());
             } else {
                 println!("{}\t{}", rel_path.display(), "NOT FOUND".bright_black());

@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap, error::Error, fs::File, io::{BufReader, Read}, path::{Path, PathBuf}, time::SystemTime
+    collections::HashMap, error::Error, fs::File, io::{BufReader, Read}, path::{Path, PathBuf}, sync::{Arc, Mutex}, time::SystemTime
 };
 
 use anyhow::anyhow;
@@ -14,6 +14,21 @@ pub trait TaskTriggerChecker {
     fn new_task_context(&mut self) -> Self::TaskContext;
     fn should_run(&mut self, task: &InstantiatedTask, context: &mut Self::TaskContext) -> Result<bool, Self::RunError>;
     fn check_outputs(&mut self, task: &InstantiatedTask, context: &mut Self::TaskContext, executed: bool) -> Result<(), Self::OutputCheckError>;
+}
+
+impl<T: TaskTriggerChecker> TaskTriggerChecker for Arc<Mutex<T>> {
+    type TaskContext = T::TaskContext;
+    type RunError = T::RunError;
+    type OutputCheckError = T::OutputCheckError;
+    fn new_task_context(&mut self) -> Self::TaskContext {
+        self.lock().unwrap().new_task_context()
+    }
+    fn should_run(&mut self, task: &InstantiatedTask, context: &mut Self::TaskContext) -> Result<bool, Self::RunError> {
+        self.lock().unwrap().should_run(task, context)
+    }
+    fn check_outputs(&mut self, task: &InstantiatedTask, context: &mut Self::TaskContext, executed: bool) -> Result<(), Self::OutputCheckError> {
+        self.lock().unwrap().check_outputs(task, context, executed)
+    }
 }
 
 #[derive(Debug, Default)]

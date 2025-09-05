@@ -13,17 +13,19 @@ impl<F: FnMut(&str)> CommandExecutor for NaiveExecutor<F> {
         &mut self,
         pwd: impl AsRef<Path>,
         commands: impl IntoIterator<Item = C>,
-    ) {
+    ) -> anyhow::Result<()> {
         for command in commands {
             match command.borrow() {
-                Command::Shell(cmd) => Self::exec_shell(&pwd, &cmd, &mut self.output_handler),
+                Command::Shell(cmd) => Self::exec_shell(&pwd, &cmd, &mut self.output_handler)?,
             }
         }
+
+        Ok(())
     }
 }
 
 impl<F: FnMut(&str)> NaiveExecutor<F> {
-    fn exec_shell(pwd: impl AsRef<Path>, cmd: &str, mut output_handler: impl FnMut(&str)) {
+    fn exec_shell(pwd: impl AsRef<Path>, cmd: &str, mut output_handler: impl FnMut(&str)) -> anyhow::Result<()> {
         let mut child = std::process::Command::new("sh")
             .arg("-c")
             .arg(cmd)
@@ -32,7 +34,7 @@ impl<F: FnMut(&str)> NaiveExecutor<F> {
             .stderr(std::process::Stdio::piped())
             .stdin(std::process::Stdio::null())
             .spawn()
-            .expect("Failed to execute command");
+            .map_err(|e| anyhow::anyhow!("Failed to execute command '{}': {e}", cmd))?;
 
         let stdout = child.stdout.take().expect("Failed to capture stdout");
         let stderr = child.stderr.take().expect("Failed to capture stderr");
@@ -71,7 +73,7 @@ impl<F: FnMut(&str)> NaiveExecutor<F> {
                 if !status.success() {
                     panic!("Command '{}' failed with exit code: {}", cmd, status);
                 }
-                break; // Exit the loop if the child process has finished
+                break Ok(()); // Exit the loop if the child process has finished
             }
         }
     }

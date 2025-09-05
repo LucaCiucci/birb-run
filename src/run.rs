@@ -1,110 +1,42 @@
-use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 
-use anyhow::anyhow;
-use colored::Colorize;
-use indicatif::{ProgressBar, ProgressStyle};
+pub mod default_run_manager;
+pub mod parallel_run_manager;
 
 use crate::{
-    cli::CliRunOptions, run::{
+    run::{
         dependency_resolution::{build_dependency_graph, topological_sort::topological_sort, DependencyGraphConstructionError, TopologicalSortError},
-        execution::{clean_instantiated_task, clean_single_task, maybe_run_single_task, naive::NaiveExecutor, triggers::NaiveTriggerChecker, CommandExecutor, ExecutionError},
+        execution::{clean_instantiated_task, clean_single_task, maybe_run_single_task, scheduler::execute_tasks_concurrently, triggers::NaiveTriggerChecker, CommandExecutor, TaskExecutionError},
     }, task::{ResolvedTaskInvocation, TaskInvocation, TaskRef, Taskfile, Workspace}
 };
 
 pub mod dependency_resolution;
 pub mod execution;
 
-pub trait RunManager {
-    fn begin<'a>(self, invocations: impl IntoIterator<Item = &'a ResolvedTaskInvocation>) -> anyhow::Result<impl RunExecution>;
+pub trait RunManager: Send + Sync {
+    type RunExecution: RunExecution;
+    fn begin<'a>(self, invocations: impl IntoIterator<Item = &'a ResolvedTaskInvocation>) -> anyhow::Result<Self::RunExecution>;
 }
 
-pub trait RunExecution {
-    fn enter_task<'a>(&'a self, invocation: &'a ResolvedTaskInvocation) -> anyhow::Result<impl TaskExecutionContext + 'a>;
+pub trait RunExecution: Send + Sync {
+    type TaskExecutionContext<'a>: TaskExecutionContext where Self: 'a;
+    fn enter_task<'a>(&'a self, invocation: &'a ResolvedTaskInvocation) -> anyhow::Result<Self::TaskExecutionContext<'a>>;
 }
 
-pub trait TaskExecutionContext {
+pub trait TaskExecutionContext: Send + Sync {
     fn run(&mut self) -> impl CommandExecutor;
     fn up_to_date(&mut self);
     // TODO clean, maybe?
 }
 
-pub struct DefaultRunManager<'a>(pub &'a CliRunOptions); // TODO also use options while cleaning
 
-impl RunManager for DefaultRunManager<'_> {
-    fn begin<'a>(self, invocations: impl IntoIterator<Item = &'a ResolvedTaskInvocation>) -> anyhow::Result<impl RunExecution> {
-        let bar = ProgressBar::new(invocations.into_iter().count() as u64);
-        bar.set_style(ProgressStyle::with_template("[{elapsed_precise}] [{bar:40.green/white}] {pos:>7}/{len:7} {msg}")?
-            .progress_chars("=>-"));
-        Ok(DefaultRunExecution {
-            bar,
-            options: self.0,
-        })
-    }
-}
-
-struct DefaultRunExecution<'a> {
-    bar: ProgressBar,
-    options: &'a CliRunOptions,
-}
-
-impl Drop for DefaultRunExecution<'_> {
-    fn drop(&mut self) {
-        self.bar.finish_with_message("All tasks completed");
-    }
-}
-
-impl RunExecution for DefaultRunExecution<'_> {
-    fn enter_task<'a>(&'a self, invocation: &'a ResolvedTaskInvocation) -> anyhow::Result<impl TaskExecutionContext + 'a> {
-        self.bar.inc(1);
-        let args = display_args(invocation);
-        self.bar.set_message(format!("task: {} {args}", invocation.r#ref.display_relative(&std::env::current_dir().unwrap()).to_string().bold().green()));
-        Ok(DefaultTaskExecutionContext {
-            bar: &self.bar,
-            invocation,
-            cwd: std::env::current_dir().map_err(|e| anyhow!("Failed to get current directory: {e}"))?,
-            options: &self.options,
-        })
-    }
-}
-
-struct DefaultTaskExecutionContext<'a> {
-    bar: &'a ProgressBar,
-    invocation: &'a ResolvedTaskInvocation,
-    cwd: PathBuf,
-    options: &'a CliRunOptions,
-}
-
-impl TaskExecutionContext for DefaultTaskExecutionContext<'_> {
-    fn run(&mut self) -> impl CommandExecutor {
-        let args = display_args(self.invocation);
-        if !self.options.compact {
-            self.bar.suspend(|| {
-                println!("    {} {args}\trunning...", self.invocation.r#ref.display_relative(&self.cwd).to_string().bold().green());
-            });
-        }
-        NaiveExecutor {
-            output_handler: |output| {
-                self.bar.suspend(|| println!("{output}"));
-            },
-        }
-    }
-
-    fn up_to_date(&mut self) {
-        if !self.options.compact {
-            let args = display_args(self.invocation);
-            self.bar.suspend(|| {
-                println!("    {} {args}\tup-to-date.", self.invocation.r#ref.display_relative(&self.cwd).to_string().bold().cyan())
-            });
-        }
-    }
-}
 
 #[derive(Debug, thiserror::Error)]
 pub enum RunError {
     #[error("Failed to build dependency graph: {0}")]
     DependencyGraphConstructionError(#[from] DependencyGraphConstructionError),
     #[error("Failed to build dependency graph: {0}")]
-    ExecutionError(#[from] ExecutionError),
+    ExecutionError(#[from] TaskExecutionError),
     #[error("Topological sort error: {0}")]
     TopologicalSortError(#[from] TopologicalSortError),
     #[error("Task not found: {0}")]
@@ -140,17 +72,64 @@ pub fn run(
     Ok(())
 }
 
+pub async fn run_parallel(
+    workspace: &Workspace,
+    current: &Taskfile,
+    req: &TaskInvocation<TaskRef>,
+    run_manager: impl RunManager + 'static,
+    max_concurrency: usize,
+) -> Result<(), RunError> {
+    let (deps_graph, instantiations) = build_dependency_graph(workspace, current, req)?;
+
+    let sorted = topological_sort(&deps_graph)?;
+
+    let trigger_checker = Arc::new(Mutex::new(NaiveTriggerChecker::default()));
+
+    let execution = run_manager.begin(sorted.iter().rev()).map_err(RunError::BeginTaskError)?;
+    let execution = Arc::new(execution);
+
+    let instantiations = Arc::new(instantiations);
+
+    // TODO concurrency as a parameter
+    let r = execute_tasks_concurrently(
+        max_concurrency, // TODO maybe physical instead?
+        sorted.iter().rev().cloned(), // FIXME stupid af
+        deps_graph,
+        move|invocation| {
+            let instantiations = instantiations.clone();
+            let invocation  = invocation.clone(); // TODO avoid clone
+            let mut trigger_checker = trigger_checker.clone();
+            let execution = execution.clone();
+            async move {
+                let r = tokio::task::spawn_blocking(move || -> Result<(), RunError> {
+                    let cx = execution.enter_task(&invocation).map_err(RunError::EnterTaskError);
+                    let r = maybe_run_single_task(
+                        &*instantiations,
+                        &invocation,
+                        &mut trigger_checker,
+                        cx?,
+                    )?;
+                    Ok(r)
+                }).await.unwrap();
+                Ok(r?)
+            }
+        },
+    ).await;
+
+    r.map_err(|e| RunError::ExecutionError(TaskExecutionError::Other(e)))
+}
+
 pub fn clean(
     workspace: &Workspace,
     current: &Taskfile,
     req: &TaskInvocation<TaskRef>,
 ) -> Result<(), RunError> {
-    let (deps_graph, instatiations) = build_dependency_graph(workspace, current, req)?;
+    let (deps_graph, instantiations) = build_dependency_graph(workspace, current, req)?;
 
     let sorted = topological_sort(&deps_graph)?;
 
     for invocation in sorted.iter() {
-        clean_single_task(current, &instatiations, invocation, |output| {
+        clean_single_task(current, &instantiations, invocation, |output| {
             println!("{}", output);
         })?;
     }

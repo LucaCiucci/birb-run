@@ -48,7 +48,38 @@ tasks:
     #phony: true
     deps:
     - task: tools:crankshaft
+    - task: p
+      with: { id: 1 }
+    - task: p
+      with: { id: 2 }
+    - task: p
+      with: { id: 3 }
+    - task: p
+      with: { id: 4 }
+    - task: p
+      with: { id: 5 }
+    - task: p
+      with: { id: 6 }
+    - task: p
+      with: { id: 7 }
+    - task: p
+      with: { id: 8 }
+    - task: p
+      with: { id: 9 }
+    - task: p
+      with: { id: 10 }
     outputs:
     - workbench.yaml
     steps:
     - echo "Workbench prepared at " $(date) > workbench.yaml
+
+
+  p:
+    params:
+      id: number
+    steps:
+    - |
+      for i in $(seq 0 50); do
+        echo "Step $i from p_{{ id }}"
+        sleep 0.1
+      done
