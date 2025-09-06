@@ -71,13 +71,15 @@ impl<C: Borrow<CliRunOptions> + Send + Sync + Clone> RunExecution for ParallelRu
         };
         let color = COLOR_RING[idx % COLOR_RING.len()];
         let display_id = format!("#{idx:<5}").color(color);
-        t.set_message(format!("{} {display_id} {} {}", "task".cyan().bold(), invocation.r#ref.display_relative(&std::env::current_dir().unwrap()).to_string().bold().green(), display_args(invocation)));
+        let t_message = format!("{} {display_id} {} {}", "task".cyan().bold(), invocation.r#ref.display_relative(&std::env::current_dir().unwrap()).to_string().bold().green(), display_args(invocation));
+        t.set_message(t_message.clone());
         Ok(ParallelTaskExecutionContext {
             bar: &self.bar,
             invocation,
             cwd: std::env::current_dir().map_err(|e| anyhow!("Failed to get current directory: {e}"))?,
             options: self.options.clone(),
             t,
+            t_message,
             idx,
             last_was: &self.last_was,
         })
@@ -91,6 +93,7 @@ pub struct ParallelTaskExecutionContext<'a, C: Borrow<CliRunOptions> + Send + Sy
     cwd: PathBuf,
     options: C,
     t: ProgressBar,
+    t_message: String,
     idx: usize,
 }
 
@@ -124,7 +127,13 @@ impl<C: Borrow<CliRunOptions> + Send + Sync> TaskExecutionContext for ParallelTa
                         let title = &output[start + set_title_prefix.len()..start + set_title_prefix.len() + end];
                         first_output_part = &output[..start];
                         second_output_part = &output[start + set_title_prefix.len() + end + 1..];
-                        self.t.set_message(format!("{} TITLE {title}", "task".cyan().bold()));
+                        self.t.set_message(format!("{} {}", self.t_message, title.dimmed()));
+                        if first_output_part.is_empty() && second_output_part.is_empty() {
+                            // nothing to print, the line was only a set title
+                            // TODO this is really hacky, find a better way, the user might want to print an empty line
+                            // and set title at the same time. The problem is that here we receive one line at a time.
+                            return;
+                        }
                     }
                 }
 

@@ -45,8 +45,6 @@ impl<F: FnMut(&str)> NaiveExecutor<F> {
             ("sh".to_string(), vec!["-c".to_string(), cmd.to_string()]) // TODO avoid useless string clone, use cow or something
         };
 
-        eprintln!("Executing command: {} {:?}", program, args);
-
         let mut child = std::process::Command::new(program)
             .args(args)
             .current_dir(pwd)
