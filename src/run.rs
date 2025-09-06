@@ -1,33 +1,16 @@
 use std::sync::{Arc, Mutex};
 
-pub mod default_run_manager;
-pub mod parallel_run_manager;
+pub mod run_manager;
 
 use crate::{
     run::{
         dependency_resolution::{build_dependency_graph, topological_sort::topological_sort, DependencyGraphConstructionError, TopologicalSortError},
-        execution::{clean_instantiated_task, clean_single_task, maybe_run_single_task, scheduler::execute_tasks_concurrently, triggers::NaiveTriggerChecker, CommandExecutor, TaskExecutionError},
+        execution::{clean_instantiated_task, clean_single_task, maybe_run_single_task, scheduler::execute_tasks_concurrently, triggers::NaiveTriggerChecker, TaskExecutionError}, run_manager::{RunExecution, RunManager},
     }, task::{ResolvedTaskInvocation, TaskInvocation, TaskRef, Taskfile, Workspace}
 };
 
 pub mod dependency_resolution;
 pub mod execution;
-
-pub trait RunManager: Send + Sync {
-    type RunExecution: RunExecution;
-    fn begin<'a>(self, invocations: impl IntoIterator<Item = &'a ResolvedTaskInvocation>) -> anyhow::Result<Self::RunExecution>;
-}
-
-pub trait RunExecution: Send + Sync {
-    type TaskExecutionContext<'a>: TaskExecutionContext where Self: 'a;
-    fn enter_task<'a>(&'a self, invocation: &'a ResolvedTaskInvocation) -> anyhow::Result<Self::TaskExecutionContext<'a>>;
-}
-
-pub trait TaskExecutionContext: Send + Sync {
-    fn run(&mut self) -> impl CommandExecutor;
-    fn up_to_date(&mut self);
-    // TODO clean, maybe?
-}
 
 
 
@@ -90,7 +73,6 @@ pub async fn run_parallel(
 
     let instantiations = Arc::new(instantiations);
 
-    // TODO concurrency as a parameter
     let r = execute_tasks_concurrently(
         max_concurrency, // TODO maybe physical instead?
         sorted.iter().rev().cloned(), // FIXME stupid af

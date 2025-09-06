@@ -5,7 +5,7 @@ use pathdiff::diff_paths;
 
 use crate::{
     command::Command,
-    run::{execution::{naive::NaiveExecutor, triggers::TaskTriggerChecker}, TaskExecutionContext},
+    run::{execution::{naive::NaiveExecutor, triggers::TaskTriggerChecker}, run_manager::TaskExecutionContext},
     task::{InstantiatedTask, OutputPath, ResolvedTaskInvocation, Taskfile},
 };
 

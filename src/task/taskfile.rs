@@ -5,7 +5,7 @@ use linked_hash_map::LinkedHashMap;
 use pathdiff::diff_paths;
 use yaml_rust::{Yaml, YamlLoader};
 
-use crate::{cli::CliRunOptions, run::{default_run_manager::DefaultRunManager, parallel_run_manager::ParallelRunManager, RunError}, task::{from_yaml::InvalidTaskObject, Task, TaskInvocation, TaskRef, Workspace, WorkspaceLoadError}};
+use crate::{cli::CliRunOptions, run::{run_manager::{default::DefaultRunManager, parallel::ParallelRunManager}, RunError}, task::{from_yaml::InvalidTaskObject, Task, TaskInvocation, TaskRef, Workspace, WorkspaceLoadError}};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum TaskfileId {

@@ -4,7 +4,7 @@ use anyhow::anyhow;
 use colored::Colorize;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 
-use crate::{cli::CliRunOptions, run::{display_args, execution::{naive::NaiveExecutor, CommandExecutor}, RunExecution, RunManager, TaskExecutionContext}, task::ResolvedTaskInvocation};
+use crate::{cli::CliRunOptions, run::{display_args, execution::{naive::NaiveExecutor, CommandExecutor}, run_manager::{RunExecution, RunManager, TaskExecutionContext}}, task::ResolvedTaskInvocation};
 
 pub struct ParallelRunManager<C: Borrow<CliRunOptions> + Send + Sync>(pub C); // TODO also use options while cleaning
 
