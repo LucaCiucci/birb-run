@@ -60,7 +60,7 @@ impl<C: Borrow<CliRunOptions> + Send + Sync + Clone> RunExecution for ParallelRu
         self.bar.set_message(format!("task: {} {args}", invocation.r#ref.display_relative(&std::env::current_dir().unwrap()).to_string().bold().green()));
         let t = self._m.insert_before(&self.bar, ProgressBar::new_spinner());
         t.set_style(
-            ProgressStyle::with_template("  {spinner:.green.bold} {msg}")
+            ProgressStyle::with_template("  {spinner:.green.bold} {elapsed_precise} {msg}")
                 .unwrap()
         );
         let idx = {
@@ -112,9 +112,11 @@ impl<C: Borrow<CliRunOptions> + Send + Sync> TaskExecutionContext for ParallelTa
                 println!("    {} {args}\trunning... #{}", self.invocation.r#ref.display_relative(&self.cwd).to_string().bold().green(), self.idx);
             });
         }
+        // TODO when finished, print a normal line so that the information about the task id is not lost
         NaiveExecutor {
             output_handler: |output| {
-                self.t.inc(1);
+                self.t.tick();
+                self.bar.tick();
 
                 let mut first_output_part: &str = output;
                 let mut second_output_part: &str = "";
