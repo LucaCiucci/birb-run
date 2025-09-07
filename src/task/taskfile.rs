@@ -131,6 +131,10 @@ impl Taskfile {
             if path.extension().map(|ext| YAML_DATA_EXTENSIONS.contains(&ext.to_str().unwrap_or(""))).unwrap_or(false) {
                 // TODO error handling with WorkspaceLoadError::Canonicalize
                 // TODO maybe canonicalize is not actually needed here, it will be done in workspace.rs anyway
+                let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+                if check_stem2 && !(stem == "task" || stem == "tasks") {
+                    return None;
+                }
                 return Some(TaskfileSource::YamlFile(path.to_path_buf().canonicalize().ok()?));
             }
 
@@ -159,9 +163,8 @@ impl Taskfile {
                     false
                 };
 
-                // TODO error handling
                 if !is_correct_ext {
-                    panic!("incorrect extension for executable taskfile: {:?}", path);
+                    return None;
                 }
 
                 // check if it is executable
