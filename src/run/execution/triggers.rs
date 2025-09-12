@@ -52,15 +52,20 @@ impl TaskTriggerChecker for NaiveTriggerChecker {
         // If a command does something and it does not have any output,
         // we assume it should always run.
         if has_no_outputs && !has_no_command {
+            log::trace!("Task {:?} has no outputs, will always run", task.name);
             return Ok(true);
         }
 
         // If a command has no steps, it cannot be run.
         if has_no_command {
+            log::trace!("Task {:?} has no commands, will never run", task.name);
             return Ok(false);
         }
 
-        Ok(sources_changed(task, output_hashes, &self.not_changed)?)
+        log::trace!("Checking sources changes for task {:?}", task.name);
+        let changed = sources_changed(task, output_hashes, &self.not_changed)?;
+        log::trace!("Task {:?} changed: {}", task.name, changed);
+        Ok(changed)
     }
     fn check_outputs(
         &mut self,
@@ -160,6 +165,7 @@ fn sources_changed(
 ) -> Result<bool, SourceChangeCheckError> {
     let newest_source_timestamp = newest_input_timestamp(task, not_changed)
         .map_err(SourceChangeCheckError::InputTimestampError)?;
+    log::trace!("Newest source timestamp for task {:?}: {:?}", task.name, newest_source_timestamp.map(|t| chrono::DateTime::<chrono::Utc>::from(t)));
 
     // check all output files against the source file timestamp
     let mut changed = false;
@@ -167,6 +173,7 @@ fn sources_changed(
         let path: &Path = path.as_ref();
         if !path.exists() {
             // If the output file does not exist, we need certainly to run the task.
+            log::info!("Output file {path:?} does not exist, task {:?} needs to run", task.name);
             changed = true;
             continue;
         }
@@ -176,6 +183,7 @@ fn sources_changed(
             let output_timestamp = metadata
                 .modified()
                 .expect("Failed to get modified time for output file");
+            log::trace!("Output timestamp for task {:?}: {:?}", task.name, chrono::DateTime::<chrono::Utc>::from(output_timestamp));
             if output_timestamp < newest_source_timestamp {
                 // If the output file is older than the newest source file,
                 // dependencies have changed.
@@ -212,6 +220,7 @@ fn newest_input_timestamp(
 ) -> anyhow::Result<Option<SystemTime>> {
     let mut newest_source_timestamp = None;
 
+    log::trace!("Checking sources for task {:?}: {:?}", task.name, task.resolve_sources().collect::<Vec<_>>());
     for path in task.resolve_sources() {
         let path: &Path = path.as_ref();
 

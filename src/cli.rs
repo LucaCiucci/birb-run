@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use clap::{Parser, ValueEnum};
 use colored::Colorize;
+use log::LevelFilter;
 
 use crate::{cli::threads_config::ThreadsConfig, task::{Task, TaskInvocation, TaskRef, Taskfile, Workspace}};
 
@@ -18,13 +19,27 @@ pub mod value_parser;
 #[clap(styles = cli_styles::CLAP_STYLES, verbatim_doc_comment)]
 pub struct Cli {
     #[clap(subcommand)]
-    command: Command,
+    pub command: Command,
 
     /// Path to the taskfile or search path.
     /// If not provided, the runner will look for a
     /// `Taskfile.yaml` in the current directory.
     #[clap(short = 'f', long, value_name = "PATH")]
-    taskfile: Option<PathBuf>,
+    pub taskfile: Option<PathBuf>,
+
+    #[clap(short = 'v', long)]
+    pub log_level: Option<LogLevel>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(ValueEnum)]
+pub enum LogLevel {
+    Off,
+    Error,
+    Warn,
+    Info,
+    Debug,
+    Trace,
 }
 
 #[derive(Parser, Debug)]
@@ -98,7 +113,23 @@ pub struct CleanOnly {
     task: String,
 }
 
-pub fn main(args: &Cli) -> anyhow::Result<()> {
+pub fn main(args: &Cli, init_env_logger: bool) -> anyhow::Result<()> {
+    if init_env_logger {
+        let mut b = env_logger::builder();
+        if let Some(level) = args.log_level {
+            let filter = match level {
+                LogLevel::Off => LevelFilter::Off,
+                LogLevel::Error => LevelFilter::Error,
+                LogLevel::Warn => LevelFilter::Warn,
+                LogLevel::Info => LevelFilter::Info,
+                LogLevel::Debug => LevelFilter::Debug,
+                LogLevel::Trace => LevelFilter::Trace,
+            };
+            b.filter_level(filter);
+        }
+        b.init();
+    }
+
     let cwd: PathBuf;
     let path = if let Some(taskfile) = &args.taskfile {
         taskfile

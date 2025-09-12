@@ -49,8 +49,10 @@ pub fn maybe_run_single_task<T: TaskTriggerChecker, C: TaskExecutionContext>(
 
     let mut context = trigger_checker.new_task_context();
 
+    log::trace!("Checking if task {:?} should run", invocation);
     let should_run = trigger_checker.should_run(task, &mut context)
         .map_err(|e| TaskExecutionError::ShouldRunCheckError(e.into()))?;
+    log::trace!("Task {:?} should run: {}", invocation, should_run);
 
     if should_run {
         execution_context.run().execute(&task.body.workdir, &task.body.steps).map_err(TaskExecutionError::CommandExecutorError)?;
