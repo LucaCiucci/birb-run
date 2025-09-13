@@ -56,6 +56,7 @@ pub fn run(
             return Err(RunError::ExecutionError(TaskExecutionError::Other(anyhow::anyhow!("Execution interrupted"))));
         }
         maybe_run_single_task(
+            current,
             &instantiations,
             invocation,
             &mut trigger_checker,
@@ -98,12 +99,14 @@ pub async fn run_parallel(
         move|invocation| {
             let instantiations = instantiations.clone();
             let invocation  = invocation.clone(); // TODO avoid clone
+            let current = current.clone(); // TODO avoid clone
             let mut trigger_checker = trigger_checker.clone();
             let execution = execution.clone();
             async move {
                 let r = tokio::task::spawn_blocking(move || -> Result<(), RunError> {
                     let cx = execution.enter_task(&invocation).map_err(RunError::EnterTaskError);
                     let r = maybe_run_single_task(
+                        &current,
                         &*instantiations,
                         &invocation,
                         &mut trigger_checker,

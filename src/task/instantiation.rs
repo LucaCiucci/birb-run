@@ -4,7 +4,7 @@ use handlebars::{Handlebars, HelperDef, RenderErrorReason};
 use serde_json::Value as Json;
 
 use crate::{
-    command::CommandInstantiationError, task::{BirbRenderContext, Deps, InstantiatedTask, OutputPathInstantiationError, Outputs, Task, TaskBody}, utils::type_checking::{check_type, TypeCheckError}
+    command::CommandInstantiationError, task::{instantiate_json_value, BirbRenderContext, Deps, InstantiatedTask, OutputPathInstantiationError, Outputs, Task, TaskBody}, utils::type_checking::{check_type, TypeCheckError}
 };
 
 impl Task {
@@ -17,12 +17,25 @@ impl Task {
 
         let mut handlebars = init_handlebars();
 
+        let mut env = env.clone();
+        for (k, v) in &self.body.env {
+            let rendered_key = handlebars.render_template(k, &BirbRenderContext { args, env: &env })?;
+            let rendered_value = instantiate_json_value(&mut handlebars, v, args, &env);
+            //panic!("In task '{}', setting env var '{}' to '{}'", self.name, rendered_key, rendered_value);
+            env.insert(rendered_key, rendered_value);
+        }
+        let env = &env;
+
         Ok(InstantiatedTask {
             name: self.name.clone(),
             body: TaskBody {
                 workdir: handlebars
-                    .render_template(&self.body.workdir.to_string_lossy(), &BirbRenderContext { args, env })?
+                    .render_template(&self.body.workdir.to_string_lossy(), &BirbRenderContext { args, env: &env })?
                     .into(),
+                env: env
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .collect(), // TODO avoid clone
                 phony: self.body.phony,
                 outputs: Outputs {
                     paths: self

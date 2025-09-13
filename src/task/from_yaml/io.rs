@@ -1,6 +1,36 @@
+use linked_hash_map::LinkedHashMap;
 use yaml_rust::Yaml;
+use serde_json::Value as Json;
 
 use crate::task::{from_yaml::{yaml_to_json, YamlToJsonError}, ArgType, OutputPath, Param, Task};
+
+#[derive(Debug)]
+#[derive(thiserror::Error)]
+pub enum InvalidEnv {
+    #[error("Invalid environment, expected a map")]
+    NotAHash,
+    #[error("Invalid environment key, expected a string but got: {0:?}")]
+    InvalidKey(Yaml),
+    #[error("Invalid environment value, could not convert to json value: {0:?}")]
+    InvalidValue(YamlToJsonError),
+}
+
+pub fn parse_env(value: &Yaml) -> Result<LinkedHashMap<String, Json>, InvalidEnv> {
+    let hash = value
+        .as_hash()
+        .ok_or(InvalidEnv::NotAHash)?;
+    let mut env = LinkedHashMap::new();
+    for (key, val) in hash {
+        let key = key
+            .as_str()
+            .ok_or_else(|| InvalidEnv::InvalidKey(key.clone()))?
+            .to_string();
+        let val = yaml_to_json(val)
+            .map_err(InvalidEnv::InvalidValue)?;
+        env.insert(key, val);
+    }
+    Ok(env)
+}
 
 #[derive(Debug)]
 #[derive(thiserror::Error)]

@@ -1,9 +1,11 @@
+use std::collections::BTreeMap;
 use std::io::Write;
 use std::{borrow::Borrow, io::BufRead, path::Path};
 use std::sync::mpsc;
 use std::thread;
 
 use tempfile::NamedTempFile;
+use serde_json::Value as Json;
 
 use crate::{command::Command, run::execution::CommandExecutor};
 
@@ -15,11 +17,12 @@ impl<F: FnMut(&str)> CommandExecutor for NaiveExecutor<F> {
     fn execute<C: Borrow<Command>>(
         &mut self,
         pwd: impl AsRef<Path>,
+        env: &BTreeMap<String, Json>,
         commands: impl IntoIterator<Item = C>,
     ) -> anyhow::Result<()> {
         for command in commands {
             match command.borrow() {
-                Command::Shell(cmd) => Self::exec_shell(&pwd, &cmd, &mut self.output_handler)?,
+                Command::Shell(cmd) => Self::exec_shell(&pwd, env, &cmd, &mut self.output_handler)?,
             }
         }
 
@@ -28,7 +31,7 @@ impl<F: FnMut(&str)> CommandExecutor for NaiveExecutor<F> {
 }
 
 impl<F: FnMut(&str)> NaiveExecutor<F> {
-    fn exec_shell(pwd: impl AsRef<Path>, cmd: &str, mut output_handler: impl FnMut(&str)) -> anyhow::Result<()> {
+    fn exec_shell(pwd: impl AsRef<Path>, env: &BTreeMap<String, Json>, cmd: &str, mut output_handler: impl FnMut(&str)) -> anyhow::Result<()> {
         // try to find the shebang
         let shebang = cmd.lines().next().filter(|line| line.starts_with("#!")).map(|line| line.to_string());
         let mut script: NamedTempFile;
@@ -51,6 +54,10 @@ impl<F: FnMut(&str)> NaiveExecutor<F> {
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .stdin(std::process::Stdio::null());
+
+        for (key, value) in env {
+            command.env(key, value.as_str().unwrap_or(&value.to_string()));
+        }
 
         // Set process group on Unix systems so we can send signals to the whole group
         #[cfg(unix)]

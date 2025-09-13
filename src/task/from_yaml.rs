@@ -12,6 +12,8 @@ mod io;
 #[derive(Debug)]
 #[derive(thiserror::Error)]
 pub enum InvalidTaskObject {
+    #[error("Invalid environment: {0}")]
+    InvalidEnv(#[from] io::InvalidEnv),
     #[error("Invalid task, expected a map")]
     InvalidTaskType,
     #[error("Invalid task key, expected a string")]
@@ -54,6 +56,11 @@ pub fn parse_task(workdir: impl Into<PathBuf>, name: &str, value: &Yaml) -> Resu
             .to_string();
         task.description = Some(description);
         used_keys.insert("description");
+    }
+
+    if let Some(value) = value.get(&Yaml::String("env".into())) {
+        task.body.env = io::parse_env(value)?;
+        used_keys.insert("env");
     }
 
     if let Some(value) = value.get(&Yaml::String("workdir".into())) {

@@ -1,8 +1,10 @@
 use std::{collections::HashMap, path::{Path, PathBuf}};
 
 use handlebars::Handlebars;
+use linked_hash_map::LinkedHashMap;
 use serde::Serialize;
 use yaml_rust::Yaml;
+use serde_json::Value as Json;
 
 use crate::{command::Command, task::{from_yaml::{self, InvalidTaskObject}, params::Param, BirbRenderContext, TaskInvocation, TaskRef}};
 
@@ -37,6 +39,7 @@ impl InstantiatedTask {
 
 #[derive(Debug, Clone)]
 pub struct TaskBody {
+    pub env: LinkedHashMap<String, Json>,
     pub workdir: PathBuf,
     pub phony: bool,
     pub outputs: Outputs,
@@ -53,6 +56,7 @@ impl Task {
             description: None,
             params: HashMap::new(),
             body: TaskBody {
+                env: LinkedHashMap::new(),
                 workdir: PathBuf::new(),
                 phony: false,
                 outputs: Outputs { paths: Vec::new() },

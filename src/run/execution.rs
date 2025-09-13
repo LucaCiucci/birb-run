@@ -1,7 +1,8 @@
-use std::{borrow::Borrow, collections::HashMap, path::Path};
+use std::{borrow::Borrow, collections::{BTreeMap, HashMap}, path::Path};
 
 use colored::Colorize;
 use pathdiff::diff_paths;
+use serde_json::Value as Json;
 
 use crate::{
     command::Command,
@@ -17,6 +18,7 @@ pub trait CommandExecutor {
     fn execute<C: Borrow<Command>>(
         &mut self,
         pwd: impl AsRef<Path>,
+        env: &BTreeMap<String, Json>,
         commands: impl IntoIterator<Item = C>,
     ) -> anyhow::Result<()>; // TODO error type
 }
@@ -38,6 +40,7 @@ pub enum TaskExecutionError {
 }
 
 pub fn maybe_run_single_task<T: TaskTriggerChecker, C: TaskExecutionContext>(
+    current: &Taskfile,
     tasks: &HashMap<ResolvedTaskInvocation, InstantiatedTask>,
     invocation: &ResolvedTaskInvocation,
     trigger_checker: &mut T,
@@ -55,7 +58,9 @@ pub fn maybe_run_single_task<T: TaskTriggerChecker, C: TaskExecutionContext>(
     log::trace!("Task {:?} should run: {}", invocation, should_run);
 
     if should_run {
-        execution_context.run().execute(&task.body.workdir, &task.body.steps).map_err(TaskExecutionError::CommandExecutorError)?;
+        let mut env = current.env.clone();
+        env.extend(task.body.env.clone());
+        execution_context.run().execute(&task.body.workdir, &env, &task.body.steps).map_err(TaskExecutionError::CommandExecutorError)?;
     } else {
         execution_context.up_to_date();
     }
@@ -95,7 +100,9 @@ pub fn clean_instantiated_task(
         let mut executor = NaiveExecutor {
             output_handler: &mut output_handler,
         };
-        executor.execute(&task.body.workdir, clean_steps).map_err(TaskExecutionError::Other)?;
+        let mut env = tasks.env.clone();
+        env.extend(task.body.env.clone());
+        executor.execute(&task.body.workdir, &env, clean_steps).map_err(TaskExecutionError::Other)?;
     }
 
     for o in task.resolve_outputs() {
