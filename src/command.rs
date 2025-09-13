@@ -1,16 +1,18 @@
 use handlebars::Handlebars;
 use serde::Serialize;
 
+use crate::task::BirbRenderContext;
+
 #[derive(Debug, Clone)]
 pub enum Command {
     Shell(String),
 }
 
 impl Command {
-    pub fn instantiate(&self, handlebars: &mut Handlebars, args: impl Serialize) -> Result<Self, CommandInstantiationError> {
+    pub fn instantiate(&self, handlebars: &mut Handlebars, args: impl Serialize, env: impl Serialize) -> Result<Self, CommandInstantiationError> {
         let Self::Shell(cmd) = self;
         let rendered = handlebars
-            .render_template(cmd, &args)?;
+            .render_template(cmd, &BirbRenderContext { args, env })?;
         Ok(Command::Shell(rendered))
     }
 }

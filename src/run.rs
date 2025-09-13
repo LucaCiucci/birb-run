@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex};
+use std::sync::{atomic::AtomicBool, Arc, Mutex};
 
 pub mod run_manager;
 
@@ -38,6 +38,13 @@ pub fn run(
     req: &TaskInvocation<TaskRef>,
     run_manager: impl RunManager,
 ) -> Result<(), RunError> {
+    let running = Arc::new(AtomicBool::new(true));
+    let r = running.clone();
+
+    ctrlc::set_handler(move || {
+        r.store(false, std::sync::atomic::Ordering::SeqCst);
+    }).unwrap();
+
     let (deps_graph, instantiations) = build_dependency_graph(workspace, current, req)?;
 
     let sorted = topological_sort(&deps_graph)?;
@@ -45,6 +52,9 @@ pub fn run(
     let mut trigger_checker = NaiveTriggerChecker::default();
     let execution = run_manager.begin(sorted.iter().rev()).map_err(RunError::BeginTaskError)?;
     for invocation in sorted.iter().rev() {
+        if !running.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err(RunError::ExecutionError(TaskExecutionError::Other(anyhow::anyhow!("Execution interrupted"))));
+        }
         maybe_run_single_task(
             &instantiations,
             invocation,
@@ -62,6 +72,13 @@ pub async fn run_parallel(
     run_manager: impl RunManager + 'static,
     max_concurrency: usize,
 ) -> Result<(), RunError> {
+    let running = Arc::new(AtomicBool::new(true));
+    let r = running.clone();
+
+    ctrlc::set_handler(move || {
+        r.store(false, std::sync::atomic::Ordering::SeqCst);
+    }).unwrap();
+
     let (deps_graph, instantiations) = build_dependency_graph(workspace, current, req)?;
 
     let sorted = topological_sort(&deps_graph)?;
@@ -77,6 +94,7 @@ pub async fn run_parallel(
         max_concurrency, // TODO maybe physical instead?
         sorted.iter().rev().cloned(), // FIXME stupid af
         deps_graph,
+        move || running.load(std::sync::atomic::Ordering::SeqCst),
         move|invocation| {
             let instantiations = instantiations.clone();
             let invocation  = invocation.clone(); // TODO avoid clone
@@ -126,7 +144,7 @@ pub fn clean_only(
     let task = workspace.resolve_task(current, &req.r#ref)
         .ok_or_else(|| RunError::TaskNotFound(req.r#ref.clone()))?
         .1
-        .instantiate(&req.args)?; // TODO error handling
+        .instantiate(&req.args, &current.env)?; // TODO error handling
 
     clean_instantiated_task(current, &task, |output| {
         println!("{}", output);

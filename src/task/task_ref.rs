@@ -3,7 +3,7 @@ use std::{fmt::Display, path::Path};
 use handlebars::Handlebars;
 use serde::Serialize;
 
-use crate::task::TaskfileId;
+use crate::task::{BirbRenderContext, TaskfileId};
 
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -36,9 +36,9 @@ impl TaskRef {
     
     /// instantiates a task reference with the given arguments
     /// the `from` field is not templates
-    pub fn instantiate(&self, handlebars: &mut Handlebars, args: &impl Serialize) -> TaskRef {
+    pub fn instantiate(&self, handlebars: &mut Handlebars, args: &impl Serialize, env: &impl Serialize) -> TaskRef {
         let render_name = |name: &str| handlebars
-            .render_template(name, args)
+            .render_template(name, &BirbRenderContext { args, env })
             .expect("Failed to render task name template");
 
         match self {

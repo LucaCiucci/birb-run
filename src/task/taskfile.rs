@@ -1,11 +1,12 @@
 use core::panic;
-use std::{fmt::Display, fs::read_to_string, os::unix::fs::PermissionsExt, path::{Path, PathBuf}, sync::Arc};
+use std::{collections::BTreeMap, fmt::Display, fs::read_to_string, os::unix::fs::PermissionsExt, path::{Path, PathBuf}, sync::Arc};
 
 use linked_hash_map::LinkedHashMap;
 use pathdiff::diff_paths;
 use yaml_rust::{Yaml, YamlLoader};
+use serde_json::Value as Json;
 
-use crate::{cli::CliRunOptions, run::{run_manager::{default::DefaultRunManager, parallel::ParallelRunManager}, RunError}, task::{from_yaml::InvalidTaskObject, Task, TaskInvocation, TaskRef, Workspace, WorkspaceLoadError}};
+use crate::{cli::CliRunOptions, run::{run_manager::{default::DefaultRunManager, parallel::ParallelRunManager}, RunError}, task::{from_yaml::{yaml_to_json, InvalidTaskObject, YamlToJsonError}, Task, TaskInvocation, TaskRef, Workspace, WorkspaceLoadError}};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum TaskfileId {
@@ -67,6 +68,8 @@ pub struct Taskfile {
 
     pub imports: LinkedHashMap<String, TaskfileImportRef>,
 
+    pub env: BTreeMap<String, Json>,
+
     /// The tasks in this collection, keyed by their names
     pub tasks: LinkedHashMap<String, Task>,
 }
@@ -115,6 +118,7 @@ impl Taskfile {
             id,
             dir,
             imports: Default::default(),
+            env: Default::default(),
             tasks: Default::default(),
         }
     }
@@ -294,6 +298,20 @@ impl Taskfile {
                 }
             }
 
+            if let Some(env) = doc.get(&Yaml::String("env".into())) {
+                let env = env
+                    .as_hash()
+                    .ok_or(YamlDocumentFormatError::InvalidEnvType)?;
+                for (key, value) in env {
+                    let key = key
+                        .as_str()
+                        .ok_or_else(|| YamlDocumentFormatError::InvalidEnvKey(key.clone()))?;
+                    let value = yaml_to_json(value)
+                        .map_err(|e| YamlDocumentFormatError::InvalidEnvValue(key.to_string(), e))?;
+                    this.env.insert(key.to_string(), value);
+                }
+            }
+
             let tasks = doc
                 .get(&Yaml::String("tasks".into()))
                 .ok_or(YamlDocumentFormatError::MissingTasksKey)?
@@ -323,7 +341,11 @@ impl Taskfile {
                 .block_on({
                     assert!(max_concurrency > 0);
                     let options = options.clone();
-                    crate::run::run_parallel(workspace, self, req, ParallelRunManager(options), max_concurrency)
+                    let run = crate::run::run_parallel(workspace, self, req, ParallelRunManager(options), max_concurrency);
+                    async move {
+                        let r = run.await;
+                        r
+                    }
                 })
         } else {
             // single-threaded run
@@ -375,4 +397,10 @@ pub enum YamlDocumentFormatError {
     InvalidTaskKey(Yaml),
     #[error("Invalid task object for `{0}`: {1}")]
     InvalidTaskObject(String, InvalidTaskObject),
+    #[error("Invalid environment type")]
+    InvalidEnvType,
+    #[error("Invalid environment key: {0:?}")]
+    InvalidEnvKey(Yaml),
+    #[error("Invalid environment value for `{0}`: {1}")]
+    InvalidEnvValue(String, YamlToJsonError),
 }

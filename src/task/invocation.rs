@@ -3,7 +3,7 @@ use handlebars::Handlebars;
 use serde::Serialize;
 use serde_json::Value as Json;
 
-use crate::task::{ResolvedRef, TaskRef, Taskfile};
+use crate::task::{BirbRenderContext, ResolvedRef, TaskRef, Taskfile};
 
 pub type ResolvedTaskInvocation = TaskInvocation<ResolvedRef>;
 
@@ -23,14 +23,14 @@ impl<Ref> TaskInvocation<Ref> {
 }
 
 impl TaskInvocation<TaskRef> {
-    pub fn instantiate(&self, handlebars: &mut Handlebars, args: &impl Serialize) -> Self {
+    pub fn instantiate(&self, handlebars: &mut Handlebars, args: &impl Serialize, env: &impl Serialize) -> Self {
         Self {
-            r#ref: self.r#ref.instantiate(handlebars, args),
+            r#ref: self.r#ref.instantiate(handlebars, args, env),
             args: self
                 .args
                 .iter()
                 .map(|(k, v)| {
-                    let rendered_value = instantiate_json_value(handlebars, v, args);
+                    let rendered_value = instantiate_json_value(handlebars, v, args, env);
                     (k.clone(), rendered_value)
                 })
                 .collect(),
@@ -55,11 +55,12 @@ pub fn instantiate_json_value(
     handlebars: &mut Handlebars,
     value: &Json,
     args: &impl Serialize,
+    env: &impl Serialize,
 ) -> Json {
     match value {
         Json::String(s) => {
             let rendered = handlebars
-                .render_template(s, args)
+                .render_template(s, &BirbRenderContext { args, env })
                 .expect("Failed to render string template");
             // reparse it, this is stupid and we should use a better way to understand if the rendered string expanded to something
             // like a number. An Idea could be to check if the template is just "{{}}"
@@ -67,13 +68,13 @@ pub fn instantiate_json_value(
         }
         Json::Array(arr) => Json::Array(
             arr.iter()
-                .map(|v| instantiate_json_value(handlebars, v, args))
+                .map(|v| instantiate_json_value(handlebars, v, args, env))
                 .collect(),
         ),
         Json::Object(obj) => {
             let mut new_obj = serde_json::Map::new();
             for (k, v) in obj {
-                new_obj.insert(k.clone(), instantiate_json_value(handlebars, v, args));
+                new_obj.insert(k.clone(), instantiate_json_value(handlebars, v, args, env));
             }
             Json::Object(new_obj)
         }

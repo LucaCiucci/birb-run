@@ -4,13 +4,14 @@ use handlebars::{Handlebars, HelperDef, RenderErrorReason};
 use serde_json::Value as Json;
 
 use crate::{
-    command::CommandInstantiationError, task::{Deps, InstantiatedTask, OutputPathInstantiationError, Outputs, Task, TaskBody}, utils::type_checking::{check_type, TypeCheckError}
+    command::CommandInstantiationError, task::{BirbRenderContext, Deps, InstantiatedTask, OutputPathInstantiationError, Outputs, Task, TaskBody}, utils::type_checking::{check_type, TypeCheckError}
 };
 
 impl Task {
     pub fn instantiate(
         &self,
         args: &BTreeMap<String, Json>,
+        env: &BTreeMap<String, Json>,
     ) -> Result<InstantiatedTask, InstantiationError> {
         self.check_args(&args)?;
 
@@ -20,7 +21,7 @@ impl Task {
             name: self.name.clone(),
             body: TaskBody {
                 workdir: handlebars
-                    .render_template(&self.body.workdir.to_string_lossy(), &args)?
+                    .render_template(&self.body.workdir.to_string_lossy(), &BirbRenderContext { args, env })?
                     .into(),
                 phony: self.body.phony,
                 outputs: Outputs {
@@ -29,28 +30,28 @@ impl Task {
                         .outputs
                         .paths
                         .iter()
-                        .map(|file| file.instantiate(&mut handlebars, args))
+                        .map(|file| file.instantiate(&mut handlebars, args, env))
                         .collect::<Result<_, _>>()?,
                 },
                 sources: self
                     .body
                     .sources
                     .iter()
-                    .map(|source| handlebars.render_template(source, &args))
+                    .map(|source| handlebars.render_template(source, &BirbRenderContext { args, env }))
                     .collect::<Result<_, _>>()?,
                 deps: Deps(
                     self.body
                         .deps
                         .0
                         .iter()
-                        .map(|dep| dep.instantiate(&mut handlebars, &args))
+                        .map(|dep| dep.instantiate(&mut handlebars, &args, env))
                         .collect::<Vec<_>>(),
                 ),
                 steps: self
                     .body
                     .steps
                     .iter()
-                    .map(|step| step.instantiate(&mut handlebars, &args))
+                    .map(|step| step.instantiate(&mut handlebars, &args, env))
                     .collect::<Result<_, _>>()
                     .map_err(InstantiationError::StepsInstantiationError)?,
                 clean: self
@@ -60,7 +61,7 @@ impl Task {
                     .map(|clean_steps| {
                         clean_steps
                             .iter()
-                            .map(|step| step.instantiate(&mut handlebars, &args))
+                            .map(|step| step.instantiate(&mut handlebars, &args, env))
                             .collect::<Result<_, _>>()
                             .map_err(InstantiationError::CleanStepsInstantiationError)
                     }).transpose()?,
@@ -116,6 +117,7 @@ fn init_handlebars() -> Handlebars<'static> {
     let mut handlebars = Handlebars::new();
     //handlebars.register_escape_fn(handlebars::no_escape);
     handlebars.register_helper("fmt_precision", Box::new(FmtPrecision));
+    handlebars.set_strict_mode(true);
     handlebars
 }
 
@@ -134,6 +136,7 @@ impl HelperDef for FmtPrecision {
             RenderErrorReason::ParamNotFoundForIndex("number", 0)
         })?;
         let num = param.value().as_f64().ok_or_else(|| {
+            println!("param: {:?}", param.value());
             RenderErrorReason::InvalidParamType("number")
         })?;
         

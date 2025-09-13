@@ -4,7 +4,7 @@ use handlebars::Handlebars;
 use serde::Serialize;
 use yaml_rust::Yaml;
 
-use crate::{command::Command, task::{from_yaml::{self, InvalidTaskObject}, params::Param, TaskInvocation, TaskRef}};
+use crate::{command::Command, task::{from_yaml::{self, InvalidTaskObject}, params::Param, BirbRenderContext, TaskInvocation, TaskRef}};
 
 
 #[derive(Debug, Clone)]
@@ -81,9 +81,9 @@ pub struct Dep {
 }
 
 impl Dep {
-    pub fn instantiate(&self, handlebars: &mut Handlebars, args: &impl Serialize) -> Dep {
+    pub fn instantiate(&self, handlebars: &mut Handlebars, args: &impl Serialize, env: &impl Serialize) -> Dep {
         Dep {
-            invocation: self.invocation.instantiate(handlebars, args),
+            invocation: self.invocation.instantiate(handlebars, args, env),
             id: self.id.clone(),
             after: self.after.clone(),
         }
@@ -102,10 +102,10 @@ pub enum OutputPath {
 }
 
 impl OutputPath {
-    pub fn instantiate(&self, handlebars: &mut Handlebars, args: &impl Serialize) -> Result<Self, OutputPathInstantiationError> {
+    pub fn instantiate(&self, handlebars: &mut Handlebars, args: &impl Serialize, env: &impl Serialize) -> Result<Self, OutputPathInstantiationError> {
         match self {
-            OutputPath::File(path) => Ok(OutputPath::File(handlebars.render_template(path, args)?)),
-            OutputPath::Directory(path) => Ok(OutputPath::Directory(handlebars.render_template(path, args)?)),
+            OutputPath::File(path) => Ok(OutputPath::File(handlebars.render_template(path, &BirbRenderContext { args, env })?)),
+            OutputPath::Directory(path) => Ok(OutputPath::Directory(handlebars.render_template(path, &BirbRenderContext { args, env })?)),
         }
     }
 

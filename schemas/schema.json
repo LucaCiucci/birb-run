@@ -29,6 +29,11 @@
         "type": "string"
       }
     },
+    "env": {
+      "type": "object",
+      "description": "A map of environment variable names to their values",
+      "additionalProperties": true
+    },
     "tasks": {
       "type": "object",
       "additionalProperties": {

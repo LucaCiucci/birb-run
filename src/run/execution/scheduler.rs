@@ -88,6 +88,7 @@ pub async fn execute_tasks_concurrently<Ref, F>(
     max_concurrency: usize,
     queue: impl IntoIterator<Item = Ref>,
     deps_graph: LinkedHashMap<Ref, LinkedHashSet<Ref>>,
+    run_while: impl Fn() -> bool + Send + Sync + 'static, // TODO test
     run: impl Fn(Ref) -> F,
 ) -> anyhow::Result<()>
 where
@@ -105,10 +106,18 @@ where
         tq.add(task, deps);
     }
 
+    let mut interrupted = false;
+
     loop {
         // feed the running tasks
         while running.len() < max_concurrency {
-            let next = tq.take_next_ready_task();
+            let next = if run_while() {
+                tq.take_next_ready_task()
+            } else {
+                // stop feeding new tasks
+                interrupted = true;
+                Poll::Ready(None)
+            };
             match next {
                 Poll::Pending => break, // no more ready tasks
                 Poll::Ready(Some(next)) => {
@@ -128,7 +137,11 @@ where
                         .filter_map(|r| r.err())
                         .collect::<Vec<_>>();
                     if all_failures.is_empty() {
-                        return Ok(());
+                        if !interrupted {
+                            return Ok(());
+                        } else {
+                            anyhow::bail!("Execution interrupted");
+                        }
                     } else {
                         anyhow::bail!("One of the tasks failed: {:?}", all_failures);
                     }
@@ -237,6 +250,7 @@ mod tests {
             1,
             vec![],
             Default::default(),
+            || true,
             |()| async move { Ok(()) },
         ).await.unwrap();
     }
@@ -249,6 +263,7 @@ mod tests {
             1,
             vec![1, 2, 3],
             Default::default(),
+            || true,
             |t| {
                 let results = results.clone();
                 async move {
@@ -269,6 +284,7 @@ mod tests {
             1,
             vec![1, 2, 3],
             [(1, [2].into_iter().collect())].into_iter().collect(), // 1 depends on 2
+            || true,
             |t| {
                 let results = results.clone();
                 async move {
@@ -317,6 +333,7 @@ mod tests {
                 (3, [1].into_iter().collect()), // 3 depends on 1
                 (3, [2].into_iter().collect()), // 3 depends on 2
             ].into_iter().collect(),
+            || true,
             move |t| {
                 let results = results2.clone();
                 let barrier_1 = barrier_1.clone();
@@ -399,6 +416,7 @@ mod tests {
                 (3, [1].into_iter().collect()), // 3 depends on 1
                 (3, [2].into_iter().collect()), // 3 depends on 2
             ].into_iter().collect(),
+            || true,
             move |t| {
                 let results = results2.clone();
                 let barrier_1 = barrier_1.clone();

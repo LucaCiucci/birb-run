@@ -125,6 +125,8 @@ fn get_instantiation<'a>(
     instantiations: &'a mut HashMap<ResolvedTaskInvocation, InstantiatedTask>,
     invocation: &ResolvedTaskInvocation,
 ) -> Result<(&'a Taskfile, &'a InstantiatedTask), InstantiationError> {
+    use std::collections::hash_map::Entry;
+
     let (tasks, task) = workspace
         .resolve_invocation_task(&invocation)
         .expect(&format!("Task {} not found", invocation.r#ref.display_absolute()));
@@ -132,8 +134,8 @@ fn get_instantiation<'a>(
     let instantiation = {
         let e = instantiations.entry(invocation.clone());
         match e {
-            std::collections::hash_map::Entry::Occupied(entry) => entry.into_mut(),
-            std::collections::hash_map::Entry::Vacant(e) => e.insert(task.instantiate(&invocation.args)?),
+            Entry::Occupied(entry) => entry.into_mut(),
+            Entry::Vacant(e) => e.insert(task.instantiate(&invocation.args, &tasks.env)?),
         }
     };
 

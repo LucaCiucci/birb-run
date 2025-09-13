@@ -134,7 +134,7 @@ pub enum YamlToJsonError {
     BadValue,
 }
 
-fn yaml_to_json(yaml: &Yaml) -> Result<Json, YamlToJsonError> {
+pub(crate) fn yaml_to_json(yaml: &Yaml) -> Result<Json, YamlToJsonError> {
     let r = match yaml {
         Yaml::Null => Json::Null,
         Yaml::Boolean(b) => Json::Bool(*b),

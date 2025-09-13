@@ -45,12 +45,21 @@ impl<F: FnMut(&str)> NaiveExecutor<F> {
             ("sh".to_string(), vec!["-c".to_string(), cmd.to_string()]) // TODO avoid useless string clone, use cow or something
         };
 
-        let mut child = std::process::Command::new(program)
-            .args(args)
-            .current_dir(pwd)
+        let mut command = std::process::Command::new(&program);
+        command.args(&args)
+            .current_dir(&pwd)
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
-            .stdin(std::process::Stdio::null())
+            .stdin(std::process::Stdio::null());
+
+        // Set process group on Unix systems so we can send signals to the whole group
+        #[cfg(unix)]
+        {
+            //use std::os::unix::process::CommandExt;
+            //command.process_group(0); // Create new process group
+        }
+
+        let mut child = command
             .spawn()
             .map_err(|e| anyhow::anyhow!("Failed to execute command '{}': {e}", cmd))?;
 
@@ -61,6 +70,36 @@ impl<F: FnMut(&str)> NaiveExecutor<F> {
         let stderr_reader = std::io::BufReader::new(stderr);
 
         let (tx, rx) = mpsc::channel();
+
+        // HACK custom re-implementation of read_until
+        //fn read_until<R: BufRead + ?Sized>(r: &mut R, delim: u8, buf: &mut Vec<u8>) -> std::io::Result<usize> {
+        //    let mut read = 0;
+        //    loop {
+        //        let (done, used) = {
+        //            let available = match r.fill_buf() {
+        //                Ok(n) => n,
+        //                //Err(ref e) if e.is_interrupted() => continue,
+        //                Err(e) => return Err(e),
+        //            };
+        //            //match memchr::memchr(delim, available) {
+        //            match available.iter().position(|&b| b == delim) {
+        //                Some(i) => {
+        //                    buf.extend_from_slice(&available[..=i]);
+        //                    (true, i + 1)
+        //                }
+        //                None => {
+        //                    buf.extend_from_slice(available);
+        //                    (false, available.len())
+        //                }
+        //            }
+        //        };
+        //        r.consume(used);
+        //        read += used;
+        //        if done || used == 0 {
+        //            return Ok(read);
+        //        }
+        //    }
+        //}
 
         // Spawn thread for stdout
         let tx_stdout = tx.clone();

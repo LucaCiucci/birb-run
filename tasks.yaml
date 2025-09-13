@@ -54,20 +54,20 @@ tasks:
       with: { id: 2 }
     - task: p
       with: { id: 3 }
-    - task: p
-      with: { id: 4 }
-    - task: p
-      with: { id: 5 }
-    - task: p
-      with: { id: 6 }
-    - task: p
-      with: { id: 7 }
-    - task: p
-      with: { id: 8 }
-    - task: p
-      with: { id: 9 }
-    - task: p
-      with: { id: 10 }
+    #- task: p
+    #  with: { id: 4 }
+    #- task: p
+    #  with: { id: 5 }
+    #- task: p
+    #  with: { id: 6 }
+    #- task: p
+    #  with: { id: 7 }
+    #- task: p
+    #  with: { id: 8 }
+    #- task: p
+    #  with: { id: 9 }
+    #- task: p
+    #  with: { id: 10 }
     outputs:
     - workbench.yaml
     steps:
@@ -85,6 +85,11 @@ tasks:
         echo "OK"
         echo -ne "\033]0;$1\007"
       }
+
+      #trap 'echo "p_{{ id }}: Received SIGINT, exiting..."; exit 130' INT
+      #trap 'echo "p_{{ id }}: Received SIGTERM, exiting..."; exit 143' TERM
+      trap 'echo "p_{{ id }}: Received SIGINT, exiting..."; exit 0' INT
+      trap 'echo "p_{{ id }}: Received SIGTERM, exiting..."; exit 0' TERM
 
       for i in $(seq 0 50); do
         set_title "p_{{ id }} step $i"

@@ -13,7 +13,14 @@ mod workspace;
 
 pub use invocation::*;
 pub use params::*;
+use serde::Serialize;
 pub use task_ref::*;
 pub use task::*;
 pub use taskfile::*;
 pub use workspace::*;
+
+#[derive(Serialize)]
+pub struct BirbRenderContext<Args, Env> {
+    pub args: Args,
+    pub env: Env,
+}
