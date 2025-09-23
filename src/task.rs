@@ -1,9 +1,9 @@
-mod from_yaml;
-
 mod instantiation;
 
 pub use instantiation::{ArgumentsCheckError, InstantiationError};
 
+mod from_yaml;
+mod frontend;
 mod invocation;
 mod params;
 mod task_ref;
@@ -11,6 +11,7 @@ mod task;
 mod taskfile;
 mod workspace;
 
+pub use frontend::*;
 pub use invocation::*;
 pub use params::*;
 use serde::Serialize;

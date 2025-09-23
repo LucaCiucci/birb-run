@@ -1,0 +1,30 @@
+tasks:
+  test-signal:
+    description: Test task that runs a long-running process to test signal handling
+    run:
+      - |
+        echo "Starting long running process..."
+        trap 'echo "Received SIGINT in script! Cleaning up..."; exit 130' INT
+        trap 'echo "Received SIGTERM in script! Cleaning up..."; exit 143' TERM
+        for i in {1..30}; do
+          echo "Running step $i of 30..."
+          sleep 1
+        done
+        echo "Process completed normally"
+
+  test-signal-nested:
+    description: Test with nested processes
+    run:
+      - |
+        echo "Starting nested process test..."
+        trap 'echo "Parent: Received signal, forwarding to children..."; jobs -p | xargs -r kill; exit 130' INT TERM
+        (
+          trap 'echo "Child: Received signal, exiting..."; exit 130' INT TERM
+          echo "Child process started"
+          for i in {1..20}; do
+            echo "Child: step $i"
+            sleep 1
+          done
+        ) &
+        wait
+        echo "All done"

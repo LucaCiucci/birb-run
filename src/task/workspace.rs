@@ -1,9 +1,12 @@
-use std::{collections::HashMap, path::{Path, PathBuf}};
+use std::{collections::HashMap, path::{Path, PathBuf}, sync::Arc};
 
-use crate::task::{ResolvedTaskInvocation, Task, TaskInvocation, TaskRef, Taskfile, TaskfileId, TaskfileImportRef, YamlLoadError};
+use linked_hash_map::LinkedHashMap;
+
+use crate::task::{AbstractTaskfileSource, ResolvedTaskInvocation, Task, TaskInvocation, TaskRef, Taskfile, TaskfileFrontend, TaskfileId, TaskfileImportRef, TaskfileLoadError, YamlLoadError};
 
 #[derive(Debug, Clone, Default)]
 pub struct Workspace {
+    frontends: LinkedHashMap<String, Arc<dyn TaskfileFrontend>>,
     tasks: HashMap<TaskfileId, Taskfile>, // TODO maybe unnecessary, use ref if possible
 }
 
@@ -22,10 +25,33 @@ impl Workspace {
         self.tasks.get(&TaskfileId::from_path(path.as_ref())).map(|t| t.id.clone())
     }
 
-    // TOOD lazy load of imports?
+    /// Find the taskfile at a given path using the registered frontends.
+    pub fn find_taskfile_source_at(&self, path: &Path) -> Option<(&String, &Arc<dyn TaskfileFrontend>, Box<dyn AbstractTaskfileSource>)> {
+        for (name, frontend) in &self.frontends {
+            if let Some(source) = frontend.find_taskfile_in_dir(path) {
+                return Some((name, frontend, source));
+            }
+        }
+        None
+    }
+
+    /// Find the taskfile at a given path using the registered frontends, searching parent directories.
+    pub fn find_taskfile_source(&self, path: &Path) -> Option<(&String, &Arc<dyn TaskfileFrontend>, Box<dyn AbstractTaskfileSource>)> {
+        let mut current = path;
+        while let Some(parent) = current.parent() {
+            if let Some(result) = self.find_taskfile_source_at(parent) {
+                return Some(result);
+            }
+            current = parent;
+        }
+        None
+    }
+
+    // TODO lazy load of imports?
     pub fn load_taskfile(&mut self, path: impl Into<PathBuf>) -> Result<TaskfileId, WorkspaceLoadError> {
         let path = path.into();
-        let source = Taskfile::find_taskfile(&path).ok_or(WorkspaceLoadError::TaskfileNotFound)?;
+        //let source = Taskfile::find_taskfile(&path).ok_or(WorkspaceLoadError::TaskfileNotFound)?;
+        let (frontend_name, frontend, source) = self.find_taskfile_source(&path).ok_or(WorkspaceLoadError::TaskfileNotFound)?;
         let taskfile_path = source
             .path()
             .canonicalize()
@@ -35,7 +61,7 @@ impl Workspace {
             return Ok(id);
         }
 
-        let tasks = source.load()?;
+        let tasks = frontend.load_taskfile(source).map_err(WorkspaceLoadError::TaskfileLoadError)?;
 
         let mut imports = tasks.imports.clone();
         let id = TaskfileId::from_path(taskfile_path.clone());
@@ -100,6 +126,8 @@ pub enum WorkspaceLoadError {
     TaskfileNotFound,
     #[error("Failed to canonicalize taskfile path: {0}")]
     Canonicalize(PathBuf),
-    #[error("Failed to load taskfile from {0}: {1}")]
-    Yaml(PathBuf, YamlLoadError),
+    #[error("Failed to load taskfile")]
+    TaskfileLoadError(#[from] TaskfileLoadError),
+    //#[error("Failed to load taskfile from {0}: {1}")]
+    //Yaml(PathBuf, YamlLoadError),
 }
