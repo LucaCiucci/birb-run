@@ -7,7 +7,7 @@ use crate::task::{Taskfile, TaskfileSource};
 pub mod yaml;
 pub mod yaml_executable;
 
-pub trait TaskfileFrontend: Debug {
+pub trait TaskfileLoader: Debug {
     fn find_taskfile_in_dir(
         &self,
         path: &Path,

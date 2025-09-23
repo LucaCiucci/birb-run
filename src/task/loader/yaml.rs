@@ -1,6 +1,6 @@
 use std::{any::Any, borrow::Cow, os::unix::fs::PermissionsExt, path::{Path, PathBuf}};
 
-use crate::task::{AbstractTaskfileSource, AbstractTaskfileSourceExt, Taskfile, TaskfileFrontend, TaskfileLoadError, TaskfileSource};
+use crate::task::{AbstractTaskfileSource, AbstractTaskfileSourceExt, Taskfile, TaskfileLoader, TaskfileLoadError, TaskfileSource};
 
 
 pub const YAML_DATA_EXTENSIONS: &[&str] = &["yml", "yaml", "json"];
@@ -9,7 +9,7 @@ pub const YAML_DATA_EXTENSIONS: &[&str] = &["yml", "yaml", "json"];
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct YamlFrontend;
 
-impl TaskfileFrontend for YamlFrontend {
+impl TaskfileLoader for YamlFrontend {
     fn find_taskfile_in_dir(
         &self,
         path: &Path,

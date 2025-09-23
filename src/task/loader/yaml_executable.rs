@@ -1,13 +1,13 @@
 use std::{any::Any, borrow::Cow, path::{Path, PathBuf}};
 
-use crate::task::{yaml::YAML_DATA_EXTENSIONS, AbstractTaskfileSource, TaskfileFrontend};
+use crate::task::{yaml::YAML_DATA_EXTENSIONS, AbstractTaskfileSource, TaskfileLoader};
 
 
 /// Frontend for executables printing YAML to stdout
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct YamlExecutableFrontend;
 
-impl TaskfileFrontend for YamlExecutableFrontend {
+impl TaskfileLoader for YamlExecutableFrontend {
     fn find_taskfile_in_dir(
         &self,
         path: &Path,
