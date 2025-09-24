@@ -138,35 +138,6 @@ impl Taskfile {
         Self::from_yaml_source(&source, taskfile, taskfile_dir)
     }
 
-    pub fn from_executable(executable: impl AsRef<Path>) -> Result<Self, YamlLoadError> {
-        let executable = executable.as_ref();
-        let working_dir = executable
-            .parent()
-            .ok_or(YamlLoadError::NoParentDirectory(executable.to_path_buf()))?;
-
-        let output = std::process::Command::new(executable)
-            .current_dir(working_dir)
-            .stdin(std::process::Stdio::null())
-            .stderr(std::process::Stdio::inherit())
-            .output()
-            .map_err(|e| YamlLoadError::ExecutableRunError(executable.to_path_buf(), e))?;
-
-        if !output.status.success() {
-            return Err(YamlLoadError::ExecutableRunError(
-                executable.to_path_buf(),
-                std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("Process exited with code {:?}", output.status.code()),
-                ),
-            ));
-        }
-
-        let source = String::from_utf8(output.stdout)
-            .map_err(|e| YamlLoadError::ExecutableOutputNotUtf8(executable.to_path_buf(), e))?;
-
-        Self::from_yaml_source(&source, executable, working_dir)
-    }
-
     pub fn from_yaml_source(source: &str, path: &Path, taskfile_dir: &Path) -> Result<Self, YamlLoadError> {
         let mut this = Self::new(TaskfileId::from_path(path));
 

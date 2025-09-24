@@ -39,10 +39,10 @@ tasks:
     - engine_plan.txt
     - workbench.yaml
     outputs:
-    - engine-{{ configuration }}.yaml
+    - engine-{{ args.configuration }}.yaml
     steps:
-    - echo "Building engine with configuration {{ configuration }}"
-    - 'echo "cfg: {{ configuration }}" > engine-{{ configuration }}.yaml'
+    - echo "Building engine with configuration {{ args.configuration }}"
+    - 'echo "cfg: {{ args.configuration }}" > engine-{{ args.configuration }}.yaml'
 
   workbench:
     #phony: true
@@ -86,13 +86,13 @@ tasks:
         echo -ne "\033]0;$1\007"
       }
 
-      #trap 'echo "p_{{ id }}: Received SIGINT, exiting..."; exit 130' INT
-      #trap 'echo "p_{{ id }}: Received SIGTERM, exiting..."; exit 143' TERM
-      trap 'echo "p_{{ id }}: Received SIGINT, exiting..."; exit 0' INT
-      trap 'echo "p_{{ id }}: Received SIGTERM, exiting..."; exit 0' TERM
+      #trap 'echo "p_{{ args.id }}: Received SIGINT, exiting..."; exit 130' INT
+      #trap 'echo "p_{{ args.id }}: Received SIGTERM, exiting..."; exit 143' TERM
+      trap 'echo "p_{{ args.id }}: Received SIGINT, exiting..."; exit 0' INT
+      trap 'echo "p_{{ args.id }}: Received SIGTERM, exiting..."; exit 0' TERM
 
       for i in $(seq 0 50); do
-        set_title "p_{{ id }} step $i"
-        echo "Step $i from p_{{ id }}"
+        set_title "p_{{ args.id }} step $i"
+        echo "Step $i from p_{{ args.id }}"
         sleep 0.1
       done

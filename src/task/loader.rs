@@ -1,14 +1,12 @@
-use std::{any::Any, borrow::Cow, fmt::Debug, os::unix::fs::PermissionsExt, path::{Path, PathBuf}};
+use std::{any::Any, borrow::Cow, fmt::Debug, path::Path};
 
-use anyhow::anyhow;
-
-use crate::task::{Taskfile, TaskfileSource};
+use crate::task::{Taskfile, YamlLoadError};
 
 pub mod yaml;
 pub mod yaml_executable;
 
 pub trait TaskfileLoader: Debug {
-    fn find_taskfile_in_dir(
+    fn find_taskfile(
         &self,
         path: &Path,
     ) -> Option<Box<dyn AbstractTaskfileSource>>;
@@ -24,6 +22,8 @@ pub trait TaskfileLoader: Debug {
 pub enum TaskfileLoadError {
     #[error("Invalid source type")]
     InvalidType,
+    #[error("Failed to load taskfile from YAML: {0}")]
+    YamlLoader(#[from] YamlLoadError),
     #[error("Failed to load taskfile: {0}")]
     Other(#[from] anyhow::Error),
 }
