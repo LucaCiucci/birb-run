@@ -1,5 +1,4 @@
-use core::panic;
-use std::{borrow::Cow, collections::BTreeMap, fmt::Display, fs::read_to_string, os::unix::fs::PermissionsExt, path::{Path, PathBuf}, sync::Arc};
+use std::{borrow::Cow, collections::BTreeMap, fmt::Display, fs::read_to_string, path::{Path, PathBuf}, sync::Arc};
 
 use linked_hash_map::LinkedHashMap;
 use pathdiff::diff_paths;
