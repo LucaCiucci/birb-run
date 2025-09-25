@@ -83,7 +83,7 @@ impl Task {
     }
 
     pub fn check_args(&self, args: &BTreeMap<String, Json>) -> Result<(), ArgumentsCheckError> {
-        for (key, _) in &self.params {
+        for (key, _) in &self.params.0 {
             if !args.contains_key(key) {
                 return Err(ArgumentsCheckError::NotFound { key: key.clone() });
             }
@@ -92,6 +92,7 @@ impl Task {
         for (key, value) in args.iter() {
             let param = self
                 .params
+                .0
                 .get(key)
                 .ok_or_else(|| ArgumentsCheckError::NotFound { key: key.clone() })?;
             check_type(&param.ty, value).map_err(|err| ArgumentsCheckError::TypeError {

@@ -107,7 +107,7 @@ pub fn parse_params(task: &mut Task, args: &Yaml) -> Result<(), ParamParsingErro
             .to_string();
         let value = parse_param(value)
             .map_err(|e| ParamParsingError::InvalidParameter(key.clone(), e))?;
-        task.params.insert(key, value);
+        task.params.0.insert(key, value);
     }
     Ok(())
 }

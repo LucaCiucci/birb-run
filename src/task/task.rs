@@ -8,12 +8,20 @@ use serde_json::Value as Json;
 
 use crate::{command::Command, task::{from_yaml::{self, InvalidTaskObject}, params::Param, BirbRenderContext, TaskInvocation, TaskRef}};
 
+#[derive(Debug, Clone, Default)]
+pub struct Params(pub HashMap<String, Param>);
+
+impl Params {
+    pub fn new() -> Self {
+        Default::default()
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct Task {
     pub name: String,
     pub description: Option<String>,
-    pub params: HashMap<String, Param>,
+    pub params: Params,
     pub body: TaskBody,
 }
 
@@ -54,7 +62,7 @@ impl Task {
         Self {
             name: name.into(),
             description: None,
-            params: HashMap::new(),
+            params: Default::default(),
             body: TaskBody {
                 env: LinkedHashMap::new(),
                 workdir: PathBuf::new(),

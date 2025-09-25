@@ -189,6 +189,7 @@ fn list(tasks: &Taskfile, args: &List) -> anyhow::Result<()> {
             continue;
         } else if args.short {
             let args = task.params
+                .0
                 .iter()
                 .map(|(name, _)| format!("<{name}>"))
                 .collect::<Vec<_>>()
@@ -206,7 +207,7 @@ fn list(tasks: &Taskfile, args: &List) -> anyhow::Result<()> {
                     }
                 }
             }
-            for (name, param) in &task.params {
+            for (name, param) in &task.params.0 {
                 let ty = param.ty.to_string();
                 let default = param.default.as_ref().map_or("".to_string(), |d| format!(" (default: {d})"));
                 println!("  {}: {}{}", name.cyan(), ty, default);

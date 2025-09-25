@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use serde_json::Value as Json;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ArgType {
     String,
     Select(Vec<String>),
@@ -50,7 +50,7 @@ impl ArgType {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Param {
     pub ty: ArgType,
     pub default: Option<Json>,
